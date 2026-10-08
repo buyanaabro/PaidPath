@@ -22,4 +22,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Always check the dev-server log for `[browser]` warnings/errors after Bryntum changes — a green build
   does not prove the component rendered.
 - Bryntum offline docs/examples: `../reference/bryntum-gantt-7.3.7/` (outside repo, never commit).
-- Pinned versions matter: `ai@4` + `@ai-sdk/google@1` (PayPal toolkit requires AI SDK v4), `zod@3`.
+- AI SDK: app uses `ai@6` + `@ai-sdk/google@3` (Gemini 3 tool-calling needs thought-signature support;
+  AI SDK v4 fails with 400). The PayPal toolkit is built on AI SDK v4 and keeps its own nested `ai@4`;
+  `getPayPalTools()` in `src/lib/paypal.ts` re-wraps its tools for v6. Use `callPayPalTool()` for
+  deterministic (non-LLM) PayPal calls — it throws `PayPalToolError` on `{ ok: false }` results.
+- `zod@3` (toolkit schemas are zod v3). New deps: pick versions published ≥7 days ago.

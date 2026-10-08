@@ -35,7 +35,7 @@ npm run smoke:ai       # Gemini calls a PayPal toolkit tool (list_invoices)
 
 - Next.js 16 (App Router, TypeScript), Tailwind CSS
 - Bryntum Gantt 7.3 (public npm trial package)
-- PayPal Agent Toolkit + Vercel AI SDK v4 + Google Gemini
+- PayPal Agent Toolkit + Vercel AI SDK v6 + Google Gemini 3.8 Flash
 - Hosting: Render
 
 ## License

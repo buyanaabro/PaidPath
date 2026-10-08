@@ -1,17 +1,17 @@
-// Phase 0 smoke test: the LLM calls a PayPal Agent Toolkit tool (AI SDK v4 path).
+// Phase 0 smoke test: Gemini calls a PayPal Agent Toolkit tool via AI SDK v6.
 // Run: npm run smoke:ai
-import nextEnv from "@next/env";
-import { generateText } from "ai";
+import { loadEnvConfig } from "@next/env";
+import { generateText, stepCountIs } from "ai";
 import { getModel } from "../src/lib/ai";
-import { createPayPalToolkit } from "../src/lib/paypal";
+import { getPayPalTools } from "../src/lib/paypal";
 
-nextEnv.loadEnvConfig(process.cwd());
+loadEnvConfig(process.cwd());
 
 async function main() {
   const { text, steps } = await generateText({
     model: getModel(),
-    tools: createPayPalToolkit().getTools(),
-    maxSteps: 4,
+    tools: getPayPalTools(),
+    stopWhen: stepCountIs(4),
     prompt:
       "List my 5 most recent PayPal invoices and summarize their statuses in one sentence.",
   });
@@ -26,6 +26,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("AI_SMOKE_FAILED", error);
+  console.error("AI_SMOKE_FAILED", error.message ?? error);
   process.exit(1);
 });
