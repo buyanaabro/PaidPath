@@ -78,6 +78,7 @@ export function useInvoices(projectId: number, initial: InvoicesSnapshot) {
     busy,
     error,
     clearError: () => setError(null),
+    replaceSnapshot: (next: InvoicesSnapshot) => setSnapshot(next),
     refresh,
     send: (taskId: number, name: string) =>
       post("", `Invoicing “${name}” — AI is drafting the note, then PayPal creates and sends the invoice…`, { taskId }),

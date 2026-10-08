@@ -36,10 +36,11 @@ export default function NewProjectForm({ defaults }: Props) {
     clientEmail: defaults.clientEmail,
     budget: "",
     startDate: defaults.startDate,
+    paymentTermsDays: "14",
     brief: "",
   });
   const set = (field: keyof typeof values) => (
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => setValues((v) => ({ ...v, [field]: event.target.value }));
   const fieldError = (field: string) => state.fieldErrors?.[field];
 
@@ -105,6 +106,22 @@ export default function NewProjectForm({ defaults }: Props) {
         {field("clientEmail", "Client email (receives PayPal invoices)", { type: "email" })}
         {field("budget", "Budget (USD)", { type: "number", min: 100, step: 50, inputMode: "decimal" })}
         {field("startDate", "Start date", { type: "date" })}
+        <label className="block text-sm font-medium text-neutral-800">
+          Payment terms
+          <select
+            name="paymentTermsDays"
+            value={values.paymentTermsDays}
+            onChange={set("paymentTermsDays")}
+            className={inputClass}
+          >
+            <option value="7">7 days</option>
+            <option value="14">14 days</option>
+            <option value="30">30 days</option>
+          </select>
+          <span className="mt-1 block text-xs text-neutral-500">
+            Each phase waits for the previous milestone&apos;s payment.
+          </span>
+        </label>
       </div>
       {field("name", "Project name (optional — AI suggests one)")}
 

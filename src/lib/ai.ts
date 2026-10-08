@@ -5,11 +5,18 @@ import { google, type GoogleLanguageModelOptions } from "@ai-sdk/google";
 export const DEFAULT_MODEL = "gemini-3.5-flash";
 export const DEFAULT_FALLBACK_MODEL = "gemini-3.8-flash";
 
-/** Primary model first, then a fallback for overload (503) or bad output. */
+// Each model has its own free-tier daily quota (20 requests/day in Oct 2026), so a lite
+// model at the end of the chain adds headroom for the hosted demo.
+export const LAST_RESORT_MODEL = "gemini-3.5-flash-lite";
+
+/** Primary model first, then fallbacks for overload (503), quota (429) or bad output. */
 export function modelChain() {
   return [
-    process.env.AI_MODEL || DEFAULT_MODEL,
-    process.env.AI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL,
+    ...new Set([
+      process.env.AI_MODEL || DEFAULT_MODEL,
+      process.env.AI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL,
+      LAST_RESORT_MODEL,
+    ]),
   ];
 }
 

@@ -3,12 +3,12 @@ import type { Db } from "@/db/client";
 import { invoices, tasks, type Invoice } from "@/db/schema";
 import { formatMoney } from "@/lib/format";
 import { callPayPalTool, PayPalToolError } from "@/lib/paypal";
+import { toIsoDate } from "@/lib/gates";
+import { projectNow, projectToday } from "@/server/clock";
 import { getProject, logAgentRun } from "@/server/projects";
 import { draftInvoiceNote, type DraftedNote, type NoteInput } from "./note";
 import { buildInvoicePayload, centsToValue, extractQrPng } from "./payload";
 import { blocksNewInvoice, isOpen, toAppStatus, toTaskInvoiceStatus } from "./status";
-
-export const PAYMENT_TERMS_DAYS = 14;
 
 export type InvoicingDeps = {
   callTool: (name: string, args: Record<string, unknown>) => Promise<unknown>;
@@ -121,7 +121,8 @@ export async function invoiceMilestone(
     throw new InvoicingError(409, `This milestone already has a ${existing.status} invoice.`);
   }
 
-  const now = deps.now();
+  // Invoice dates follow the project clock (demo clock when simulated).
+  const now = projectNow(project, deps.now());
   try {
     let invoice = existing;
     if (!invoice) {
@@ -160,7 +161,8 @@ export async function invoiceMilestone(
           milestoneName: task.name,
           amountCents: task.amountCents,
           note: drafted.note,
-          invoiceDate: now.toISOString().slice(0, 10),
+          // PayPal needs a real date here; the project clock only drives our own dates.
+          invoiceDate: deps.now().toISOString().slice(0, 10),
         }),
       )) as { href?: string; id?: string };
       const paypalInvoiceId = created.id ?? created.href?.split("/").pop();
@@ -205,7 +207,7 @@ export async function invoiceMilestone(
       .set({
         qrPng,
         sentAt: now.toISOString(),
-        dueAt: new Date(now.getTime() + PAYMENT_TERMS_DAYS * day).toISOString(),
+        dueAt: new Date(now.getTime() + project.paymentTermsDays * day).toISOString(),
       })
       .where(eq(invoices.id, invoice.id))
       .run();
@@ -242,6 +244,8 @@ export async function refreshProjectInvoices(
   projectId: number,
   deps: InvoicingDeps = defaultDeps,
 ) {
+  const project = getProject(db, projectId);
+  if (!project) return 0;
   const open = db
     .select()
     .from(invoices)
@@ -255,7 +259,7 @@ export async function refreshProjectInvoices(
       const paypal = (await deps.callTool("get_invoice", {
         invoice_id: invoice.paypalInvoiceId,
       })) as PayPalInvoice;
-      const result = applyPayPalState(db, invoice.id, paypal, deps.now());
+      const result = applyPayPalState(db, invoice.id, paypal, projectNow(project, deps.now()));
       if (result.changed) {
         changed++;
         logAgentRun(db, {
@@ -296,7 +300,7 @@ export async function remindInvoice(
   }
   const updated = db
     .update(invoices)
-    .set({ reminderCount: invoice.reminderCount + 1, lastReminderAt: deps.now().toISOString() })
+    .set({ reminderCount: invoice.reminderCount + 1, lastReminderAt: projectNow(project, deps.now()).toISOString() })
     .where(eq(invoices.id, invoiceId))
     .returning()
     .get();
@@ -322,12 +326,14 @@ export async function recordDemoPayment(
   const started = Date.now();
   const invoice = getOwnedInvoice(db, projectId, invoiceId);
   if (!isOpen(invoice.status)) throw new InvoicingError(409, "This invoice is not awaiting payment.");
-  const now = deps.now();
+  const project = getProject(db, projectId)!;
+  const now = projectNow(project, deps.now());
   try {
     await deps.callTool("record_payment_for_invoice", {
       invoice_id: invoice.paypalInvoiceId,
       method: "BANK_TRANSFER",
-      payment_date: now.toISOString().slice(0, 10),
+      // PayPal rejects future payment dates, so report the real date to PayPal.
+      payment_date: deps.now().toISOString().slice(0, 10),
       amount: { currency_code: invoice.currency, value: centsToValue(invoice.amountCents) },
       note: "Sandbox demo payment recorded in PaidPath",
     });
@@ -353,6 +359,8 @@ export async function recordDemoPayment(
 export type InvoiceView = Omit<Invoice, "qrPng"> & { hasQr: boolean; overdue: boolean };
 
 export function listProjectInvoices(db: Db, projectId: number, now = new Date()): InvoiceView[] {
+  const project = getProject(db, projectId);
+  const today = project ? projectToday(project, now) : toIsoDate(now.toISOString());
   return db
     .select()
     .from(invoices)
@@ -362,7 +370,7 @@ export function listProjectInvoices(db: Db, projectId: number, now = new Date())
     .map(({ qrPng, ...rest }) => ({
       ...rest,
       hasQr: Boolean(qrPng),
-      overdue: rest.status === "sent" && Boolean(rest.dueAt) && Date.parse(rest.dueAt!) < now.getTime(),
+      overdue: rest.status === "sent" && Boolean(rest.dueAt) && toIsoDate(rest.dueAt!) < today,
     }));
 }
 

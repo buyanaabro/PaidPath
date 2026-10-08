@@ -12,6 +12,7 @@ export type NewProjectInput = {
   budgetCents: number;
   currency: string;
   startDate: string;
+  paymentTermsDays?: number;
   briefText: string;
 };
 

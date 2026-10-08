@@ -23,6 +23,9 @@ const BriefFormSchema = z.object({
     .min(100, "Budget must be at least $100")
     .max(1_000_000, "Budget must be at most $1,000,000"),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a start date"),
+  paymentTermsDays: z.coerce
+    .number()
+    .refine((days) => [7, 14, 30].includes(days), "Pick 7, 14 or 30 days"),
   brief: z
     .string()
     .trim()
@@ -67,6 +70,7 @@ export async function createProjectFromBrief(
         budgetCents,
         currency: "USD",
         startDate: input.startDate,
+        paymentTermsDays: input.paymentTermsDays,
         briefText: input.brief,
       },
       plan,

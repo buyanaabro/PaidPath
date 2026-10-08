@@ -28,8 +28,30 @@ function toWireTask(task: Task): WireRow {
     amount: task.amountCents === null ? null : task.amountCents / 100,
     invoiceStatus: task.invoiceStatus,
     paymentGate: task.paymentGate,
+    gateHold: task.gateHold,
+    baselines: parseBaselines(task.baselines),
   };
   return Object.fromEntries(Object.entries(row).filter(([, v]) => v !== null));
+}
+
+function parseBaselines(json: string | null): unknown[] | null {
+  if (!json) return null;
+  try {
+    const value = JSON.parse(json);
+    return Array.isArray(value) && value.length ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Keeps only the baseline fields we persist (Bryntum sends more). */
+function serializeBaselines(value: unknown): string | null {
+  if (!Array.isArray(value) || !value.length) return null;
+  return JSON.stringify(
+    value
+      .filter((b): b is Record<string, unknown> => Boolean(b) && typeof b === "object")
+      .map((b) => ({ startDate: b.startDate ?? null, endDate: b.endDate ?? null, duration: b.duration ?? null })),
+  );
 }
 
 export function loadProject(db: Db, projectId: number): LoadResponse | null {
@@ -103,6 +125,8 @@ function taskValues(row: WireRow): Partial<NewTask> {
   if (has("expanded")) values.expanded = Boolean(row.expanded);
   if (has("parentIndex")) values.orderIndex = asNullableNumber(row.parentIndex) ?? 0;
   if (has("paymentGate")) values.paymentGate = Boolean(row.paymentGate);
+  if (has("gateHold")) values.gateHold = asNullableString(row.gateHold);
+  if (has("baselines")) values.baselines = serializeBaselines(row.baselines);
   if (has("amount")) {
     const amount = asNullableNumber(row.amount);
     values.amountCents = amount === null ? null : Math.round(amount * 100);

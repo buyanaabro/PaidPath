@@ -5,6 +5,7 @@ import ProjectWorkspace from "@/components/workspace/ProjectWorkspace";
 import { getDb } from "@/db/client";
 import { tasks } from "@/db/schema";
 import { formatMoney } from "@/lib/format";
+import { isSimulated, projectToday } from "@/server/clock";
 import { invoicesSnapshot } from "@/server/invoicing/http";
 import { getProject } from "@/server/projects";
 
@@ -30,7 +31,9 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[proj
         status: project.status,
         total: formatMoney(Number(total?.cents ?? 0), project.currency),
         currency: project.currency,
+        paymentTermsDays: project.paymentTermsDays,
       }}
+      initialClock={{ today: projectToday(project), simulated: isSimulated(project) }}
       initialInvoices={invoicesSnapshot(id)}
     />
   );

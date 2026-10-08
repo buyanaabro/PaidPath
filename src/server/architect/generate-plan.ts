@@ -72,7 +72,7 @@ export async function generatePlan(input: BriefInput) {
         prompt,
         maxRetries: 1,
         // Fail over quickly from the primary; give the last model more room.
-        abortSignal: AbortSignal.timeout(index === 0 ? 45_000 : 60_000),
+        abortSignal: AbortSignal.timeout(index === 0 ? 45_000 : 30_000),
       });
       return { plan: normalizePlan(output, input.budgetCents), attempts: index + 1, model };
     } catch (error) {

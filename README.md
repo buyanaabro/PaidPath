@@ -68,6 +68,16 @@ the seeded demo whenever the instance restarts.
   the timeline offers the client pay page, the PayPal QR code, `send_invoice_reminder`,
   and a sandbox-only "Record payment" (`record_payment_for_invoice`). Open invoices are
   polled every 15s, so a client paying on PayPal shows up without a reload.
+- **Payment-gated dependencies** — every billable milestone (except the last) is a
+  payment gate: the next phase can't start before the client is expected to pay
+  (milestone date + payment terms → the invoice's due date → today while overdue → the
+  actual PayPal payment date). PaidPath writes these as `startnoearlierthan` constraints
+  and lets Bryntum's scheduling engine reflow the plan, so paying early pulls the launch
+  in and paying late pushes it out (with a Bryntum toast). Held tasks are hatched with a
+  lock and a "waiting for payment" indicator; overdue milestones turn red. A baseline is
+  captured when the plan is accepted, the header shows projected finish vs baseline, the
+  toolbar toggles critical path / baseline, and a cash chart compares baseline, projected
+  and received cash. A per-project **demo clock** (header) fast-forwards time.
 - **Bryntum Gantt** loads and saves through Bryntum's CrudManager protocol
   (`/api/projects/[id]/gantt`: `GET` load, `POST` sync) backed by SQLite (Drizzle ORM).
   Edits auto-sync; client-side phantom ids are mapped to database ids server-side.

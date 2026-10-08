@@ -54,6 +54,22 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - React Compiler lint (`react-hooks/*`) is strict: no setState in effects (pass initial data from the
   server page instead), no `Date.now()` in render (compute on the server), no ref access while building
   Bryntum configs (one justified disable in `PlanGantt.tsx`).
+- Payment gates: rule in `src/lib/gates.ts` (pure, date-only `YYYY-MM-DD`); applied client-side in
+  `src/components/gantt/payment-gates.ts` (`applyPaymentGates` iterates gates in schedule order with
+  `commitAsync` between passes). Holds are `startnoearlierthan` constraints tagged by `tasks.gateHold`
+  (only tagged constraints are ever released). `PlanGantt` serializes all reconciliation through a
+  promise queue (`reconcile`). Project clock: `src/server/clock.ts` (`projectToday/projectNow`); invoice
+  dates use it, but PayPal API fields (`invoice_date`, `payment_date`) always get the real date.
+- Bryntum 7 class names: `.b-sch-time-range` (time ranges), `.b-menu-item`, `.b-slide-toggle`.
+  Bryntum renders indicators mid-recalculation — guard against undefined task dates in renderers.
+  The time-range store is removed from CrudManager (`removeCrudStore("timeRanges")`) — Today line is local.
+- TimelineChart (S-curve) was spiked and rejected for cash: it only calls series callbacks for leaf
+  tasks during their working days (never milestones / payment gaps) and only draws if enabled at
+  construction. Cash chart is `src/components/invoices/CashChart.tsx` (series in `src/lib/cashflow.ts`).
+- Gemini free tier = ~20 requests/day **per model**; `modelChain()` ends with `gemini-3.5-flash-lite`.
+  Real-API scripts (`eval:architect`, `smoke:*`) burn quota — run sparingly.
+- Screenshots: use `SCREENSHOT=/tmp/x.png WINDOW_SIZE=1440,1000 node scripts/dev/browser-eval.mjs …`
+  (CDP capture). Plain `--headless --screenshot --virtual-time-budget` can hang on this app.
 - `logAgentRun` swallows its own errors (audit logging must never break the action).
 - A long-running `npm run dev` keeps its DB connection from before new migrations — restart dev after
   `db:generate` (fresh processes, e.g. Render deploys, migrate automatically).

@@ -97,3 +97,69 @@
 .pp-ledger .pp-action:first-child {
   margin-inline-start: 0;
 }
+
+/* ---- Phase 4: payment gates ---- */
+
+/* Overdue milestones turn red. */
+.b-gantt-task-wrap.pp-invoice-overdue .b-gantt-task-content {
+  --b-sch-event-background: #dc2626;
+}
+.pp-pill-overdue {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Tasks held back by an unpaid milestone: hatched bar + lock. */
+.b-gantt-task-wrap.pp-gate-held:not(.b-milestone-wrap) .b-gantt-task {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgb(255 255 255 / 0.45) 0 6px,
+    transparent 6px 12px
+  );
+  outline: 1px dashed rgb(146 64 14 / 0.6);
+  outline-offset: 1px;
+}
+.pp-lock {
+  margin-inline-end: 0.4em;
+  font-size: 0.85em;
+  opacity: 0.85;
+}
+.pp-hold-indicator {
+  color: #b45309;
+}
+
+/* Today line (amber when the demo clock is simulating). Bryntum 7: .b-sch-time-range */
+.b-sch-time-range.pp-today {
+  --pp-today-color: #2563eb;
+  --b-color: var(--pp-today-color);
+  --b-primary: var(--pp-today-color);
+  font-weight: 600;
+}
+.b-sch-time-range.pp-today-simulated {
+  --pp-today-color: #d97706;
+}
+.b-sch-time-range.b-sch-line.pp-today:not(:empty) {
+  background: var(--pp-today-color);
+  color: #fff;
+}
+.b-sch-time-range.b-sch-line.pp-today:empty {
+  background: var(--pp-today-color);
+  width: 2px;
+}
+
+/* Bryntum toasts for schedule shifts. */
+.b-toast.pp-toast-good {
+  background: #166534;
+  color: #fff;
+}
+.b-toast.pp-toast-bad {
+  background: #9a3412;
+  color: #fff;
+}
+
+/* Compact Gantt toolbar. */
+.b-gantt .b-toolbar.b-dock-top {
+  min-height: 0;
+  padding-block: 0.15em;
+  font-size: 0.85em;
+}

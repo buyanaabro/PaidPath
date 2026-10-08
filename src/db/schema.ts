@@ -29,6 +29,9 @@ export const projects = sqliteTable("projects", {
   status: text("status", { enum: ["draft", "active"] })
     .notNull()
     .default("active"),
+  paymentTermsDays: integer("payment_terms_days").notNull().default(14),
+  // Per-project demo clock (YYYY-MM-DD); null means the real date.
+  demoToday: text("demo_today"),
   ...timestamps,
 });
 
@@ -58,6 +61,10 @@ export const tasks = sqliteTable("tasks", {
   paymentGate: integer("payment_gate", { mode: "boolean" })
     .notNull()
     .default(false),
+  // Date (YYYY-MM-DD) of a payment-gate hold PaidPath placed on this task.
+  gateHold: text("gate_hold"),
+  // Bryntum baselines as JSON ([{ startDate, endDate }]).
+  baselines: text("baselines"),
 });
 
 export const dependencies = sqliteTable("dependencies", {

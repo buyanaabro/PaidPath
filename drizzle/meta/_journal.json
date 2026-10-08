@@ -22,6 +22,13 @@
       "when": 1791457681136,
       "tag": "0002_invoices",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791488881111,
+      "tag": "0003_phase4_gates",
+      "breakpoints": true
     }
   ]
 }

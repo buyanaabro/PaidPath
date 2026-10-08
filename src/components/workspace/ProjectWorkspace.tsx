@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import AppHeader from "@/components/AppHeader";
 import GanttClient from "@/components/gantt/GanttClient";
+import type { GateState, ScheduleInfo } from "@/components/gantt/PlanGantt";
 import { SaveStatusPill, type SaveStatus } from "@/components/gantt/save-status";
+import CashChart from "@/components/invoices/CashChart";
 import LedgerClient from "@/components/invoices/LedgerClient";
 import QrDialog from "@/components/invoices/QrDialog";
 import {
@@ -11,8 +13,10 @@ import {
   type InvoiceAction,
   type InvoicesSnapshot,
 } from "@/components/invoices/useInvoices";
-import { formatMoney } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
+import { daysBetween } from "@/lib/gates";
 import type { InvoiceView } from "@/server/invoicing/service";
+import DemoClock, { type ClockState } from "./DemoClock";
 import PlanDraftBanner from "./PlanDraftBanner";
 
 type Props = {
@@ -23,14 +27,16 @@ type Props = {
     status: "draft" | "active";
     total: string;
     currency: string;
+    paymentTermsDays: number;
   };
   initialInvoices: InvoicesSnapshot;
+  initialClock: ClockState;
 };
 
 const LEDGER_MIN = 140;
 const LEDGER_DEFAULT = 270;
 
-export default function ProjectWorkspace({ project, initialInvoices }: Props) {
+export default function ProjectWorkspace({ project, initialInvoices, initialClock }: Props) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ state: "idle" });
   // Bumped after the AI replaces the plan, remounting the Gantt so it reloads.
   const [planVersion, setPlanVersion] = useState(0);
@@ -39,8 +45,32 @@ export default function ProjectWorkspace({ project, initialInvoices }: Props) {
   const [ledgerHeight, setLedgerHeight] = useState(LEDGER_DEFAULT);
   const [ledgerOpen, setLedgerOpen] = useState(true);
   const splitRef = useRef<HTMLElement>(null);
+  const [clock, setClock] = useState(initialClock);
+  const [schedule, setSchedule] = useState<ScheduleInfo>({
+    finish: null,
+    baselineFinish: null,
+    cash: [],
+  });
   const invoicesApi = useInvoices(project.id, initialInvoices);
   const { invoices, busy, error } = invoicesApi;
+
+  const gate = useMemo<GateState>(
+    () => ({
+      today: clock.today,
+      simulated: clock.simulated,
+      termsDays: project.paymentTermsDays,
+      invoices: invoices.map((invoice) => ({
+        taskId: invoice.taskId,
+        status: invoice.status,
+        dueAt: invoice.dueAt,
+        paidAt: invoice.paidAt,
+        overdue: invoice.overdue,
+      })),
+    }),
+    [clock, invoices, project.paymentTermsDays],
+  );
+  const slip =
+    schedule.finish && schedule.baselineFinish ? daysBetween(schedule.baselineFinish, schedule.finish) : null;
 
   const runAction = useCallback(
     (action: InvoiceAction, invoice: InvoiceView | undefined, taskId: number, name: string) => {
@@ -91,6 +121,14 @@ export default function ProjectWorkspace({ project, initialInvoices }: Props) {
   return (
     <main className="flex h-screen flex-col">
       <AppHeader>
+        <DemoClock
+          projectId={project.id}
+          clock={clock}
+          onChange={(next, snapshot) => {
+            setClock(next);
+            invoicesApi.replaceSnapshot(snapshot);
+          }}
+        />
         <SaveStatusPill status={saveStatus} />
       </AppHeader>
       <div className="flex items-end justify-between gap-4 border-b border-neutral-200 px-6 py-3">
@@ -99,6 +137,19 @@ export default function ProjectWorkspace({ project, initialInvoices }: Props) {
           <p className="text-xs text-neutral-500">Client: {project.clientName}</p>
         </div>
         <div className="flex gap-5 text-sm text-neutral-600">
+          {schedule.finish && (
+            <span data-testid="finish-kpi">
+              Projected finish{" "}
+              <span className="font-semibold tabular-nums text-neutral-900">{formatDate(schedule.finish)}</span>
+              {slip !== null && slip !== 0 && (
+                <span className={`ml-1 font-semibold ${slip > 0 ? "text-red-700" : "text-emerald-700"}`}>
+                  {" "}
+                  {slip > 0 ? `+${slip}` : slip} days vs baseline
+                </span>
+              )}
+              {slip === 0 && <span className="ml-1 text-neutral-500"> on baseline</span>}
+            </span>
+          )}
           <span>
             Contract <span className="font-semibold tabular-nums text-neutral-900">{project.total}</span>
           </span>
@@ -132,6 +183,8 @@ export default function ProjectWorkspace({ project, initialInvoices }: Props) {
             canInvoice={project.status === "active"}
             onInvoiceAction={onGanttAction}
             taskStatuses={invoicesApi.taskStatuses}
+            gate={gate}
+            onSchedule={setSchedule}
             focusTaskId={focusTask}
           />
         </div>
@@ -177,15 +230,20 @@ export default function ProjectWorkspace({ project, initialInvoices }: Props) {
             </button>
           </div>
           {ledgerOpen && (
-            <div className="pp-ledger" style={{ height: ledgerHeight }}>
-              <LedgerClient
-                invoices={invoices}
-                busy={Boolean(busy)}
-                onAction={(action, invoice) =>
-                  runAction(action, invoice, invoice.taskId ?? 0, invoice.milestoneName)
-                }
-                onSelect={(invoice) => invoice.taskId && setFocusTask({ id: invoice.taskId })}
-              />
+            <div className="flex" style={{ height: ledgerHeight }}>
+              <div className="w-[380px] shrink-0 border-r border-neutral-200">
+                <CashChart milestones={schedule.cash} today={clock.today} />
+              </div>
+              <div className="pp-ledger min-w-0 flex-1">
+                <LedgerClient
+                  invoices={invoices}
+                  busy={Boolean(busy)}
+                  onAction={(action, invoice) =>
+                    runAction(action, invoice, invoice.taskId ?? 0, invoice.milestoneName)
+                  }
+                  onSelect={(invoice) => invoice.taskId && setFocusTask({ id: invoice.taskId })}
+                />
+              </div>
             </div>
           )}
         </div>

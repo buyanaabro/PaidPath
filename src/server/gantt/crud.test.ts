@@ -107,6 +107,36 @@ describe("syncProject", () => {
     assert.equal(taskByName("Milestone: Site live").amountCents, 325_050);
   });
 
+  test("round-trips gate holds and baselines, tolerating bad baseline data", () => {
+    const wireframes = taskByName("Wireframes");
+    syncProject(db, projectId, {
+      tasks: {
+        updated: [
+          {
+            id: wireframes.id,
+            gateHold: "2026-11-20",
+            constraintType: "startnoearlierthan",
+            constraintDate: "2026-11-20T00:00:00+08:00",
+            baselines: [{ startDate: "2026-11-06", endDate: "2026-11-10", duration: 4, extra: "dropped" }],
+          },
+        ],
+      },
+    });
+    const row = flatten(loadProject(db, projectId)!.tasks.rows).find((t) => t.id === wireframes.id)!;
+    assert.equal(row.gateHold, "2026-11-20");
+    assert.equal(row.constraintType, "startnoearlierthan");
+    assert.deepEqual(row.baselines, [{ startDate: "2026-11-06", endDate: "2026-11-10", duration: 4 }]);
+
+    db.update(tasks).set({ baselines: "{not json" }).where(eq(tasks.id, wireframes.id)).run();
+    const reloaded = flatten(loadProject(db, projectId)!.tasks.rows).find((t) => t.id === wireframes.id)!;
+    assert.equal(reloaded.baselines, undefined);
+
+    syncProject(db, projectId, { tasks: { updated: [{ id: wireframes.id, gateHold: null, constraintType: null, constraintDate: null }] } });
+    const released = flatten(loadProject(db, projectId)!.tasks.rows).find((t) => t.id === wireframes.id)!;
+    assert.equal(released.gateHold, undefined);
+    assert.equal(released.constraintType, undefined);
+  });
+
   test("removing a parent cascades its children and their dependencies", () => {
     const design = taskByName("Design");
     const response = syncProject(db, projectId, { tasks: { removed: [{ id: design.id }] } });

@@ -6,6 +6,7 @@ import { agentLog, invoices, projects, tasks } from "@/db/schema";
 import { seedDemoProject } from "@/db/seed";
 import {
   invoiceMilestone,
+  listProjectInvoices,
   InvoicingError,
   milestoneStatuses,
   recordDemoPayment,
@@ -129,6 +130,45 @@ describe("invoiceMilestone", () => {
     const invoice = await invoiceMilestone(db, projectId, milestoneId, deps);
     assert.equal(invoice.noteSource, "template");
     assert.equal(invoice.status, "sent");
+  });
+});
+
+describe("project clock and payment terms", () => {
+  const setProject = (values: Partial<typeof projects.$inferInsert>) =>
+    db.update(projects).set(values).where(eq(projects.id, projectId)).run();
+
+  test("sent/due dates follow the demo clock and the project's terms", async () => {
+    setProject({ demoToday: "2026-11-06", paymentTermsDays: 7 });
+    const invoice = await invoiceMilestone(db, projectId, milestoneId, paypal.deps);
+    assert.equal(invoice.sentAt, "2026-11-06T12:00:00.000Z");
+    assert.equal(invoice.dueAt, "2026-11-13T12:00:00.000Z");
+  });
+
+  test("overdue is judged against the project's today", async () => {
+    setProject({ demoToday: "2026-11-06" });
+    const invoice = await invoiceMilestone(db, projectId, milestoneId, paypal.deps);
+    const view = () => listProjectInvoices(db, projectId).find((i) => i.id === invoice.id)!;
+    assert.equal(view().overdue, false);
+    setProject({ demoToday: "2026-11-20" }); // due date itself: not overdue yet
+    assert.equal(view().overdue, false);
+    setProject({ demoToday: "2026-11-21" });
+    assert.equal(view().overdue, true);
+  });
+
+  test("payments are dated on the project clock, but PayPal gets the real date", async () => {
+    setProject({ demoToday: "2026-11-08" });
+    const invoice = await invoiceMilestone(db, projectId, milestoneId, paypal.deps);
+    const calls: Record<string, unknown>[] = [];
+    const deps = {
+      ...paypal.deps,
+      callTool: async (name: string, args: Record<string, unknown>) => {
+        if (name === "record_payment_for_invoice") calls.push(args);
+        return paypal.deps.callTool(name, args);
+      },
+    };
+    const paid = await recordDemoPayment(db, projectId, invoice.id, deps);
+    assert.equal(paid.paidAt, "2026-11-08T12:00:00.000Z");
+    assert.equal(calls[0].payment_date, "2026-11-20"); // fake "real" now from deps.now()
   });
 });
 
