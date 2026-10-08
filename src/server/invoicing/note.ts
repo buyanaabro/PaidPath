@@ -33,7 +33,7 @@ export async function draftInvoiceNote(input: NoteInput): Promise<DraftedNote> {
     `Work delivered in this phase: ${input.deliverables.join("; ") || "see milestone"}`,
   ].join("\n");
 
-  for (const model of modelChain()) {
+  for (const [index, model] of modelChain().entries()) {
     try {
       const { text } = await generateText({
         model: getModel(model),
@@ -45,7 +45,9 @@ export async function draftInvoiceNote(input: NoteInput): Promise<DraftedNote> {
           "no greeting line, no signature, no markdown.",
         prompt,
         maxRetries: 0,
-        abortSignal: AbortSignal.timeout(12_000),
+        // Primary gets more room (Render → Gemini latency varies); fallback stays short so
+        // invoicing never waits long before using the template.
+        abortSignal: AbortSignal.timeout(index === 0 ? 20_000 : 8_000),
       });
       const note = text.trim().replace(/\s+/g, " ");
       if (note.length >= 40) return { note: note.slice(0, MAX_LENGTH), source: "ai" };
