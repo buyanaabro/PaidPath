@@ -32,11 +32,9 @@ const ganttProps: BryntumGanttProps = {
       width: 140,
       renderer: ({ record }: { record: Model }) => {
         const task = record as PaidTaskModel;
-        return task.amount
-          ? StringHelper.encodeHtml(
-              `${money.format(task.amount)} · ${task.invoiceStatus}`,
-            )
-          : "";
+        if (!task.amount) return "";
+        const status = task.invoiceStatus === "none" ? "" : ` · ${task.invoiceStatus}`;
+        return StringHelper.encodeHtml(`${money.format(task.amount)}${status}`);
       },
     },
   ],

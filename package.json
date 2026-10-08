@@ -12,7 +12,8 @@
     "smoke:ai": "tsx scripts/smoke-ai.ts",
     "db:generate": "drizzle-kit generate",
     "db:seed": "tsx scripts/seed.ts",
-    "test": "node --import tsx --test \"src/**/*.test.ts\""
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "eval:architect": "tsx scripts/eval-architect.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "3.0.130",

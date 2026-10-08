@@ -37,6 +37,17 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   AI SDK v4 fails with 400). The PayPal toolkit is built on AI SDK v4 and keeps its own nested `ai@4`;
   `getPayPalTools()` in `src/lib/paypal.ts` re-wraps its tools for v6. Use `callPayPalTool()` for
   deterministic (non-LLM) PayPal calls — it throws `PayPalToolError` on `{ ok: false }` results.
+- Models: `modelChain()` = `gemini-3.5-flash` → fallback `gemini-3.8-flash` (3.8 was often 503 /
+  timing out in Oct 2026). Loop over the chain with `maxRetries: 1` for user-facing calls.
+- AI architect: `src/server/architect/` (schema → `normalizePlan` → `materializePlan` → `insertPlanTree`).
+  `npm run eval:architect` = real Gemini regression check. Server actions in `src/app/projects/actions.ts`.
+- Server actions in client components: drive disabled/busy UI with explicit state, not
+  `useTransition` pending — remounting the Gantt inside a transition kept it pending for 15s+.
+- `logAgentRun` swallows its own errors (audit logging must never break the action).
+- A long-running `npm run dev` keeps its DB connection from before new migrations — restart dev after
+  `db:generate` (fresh processes, e.g. Render deploys, migrate automatically).
+- In CDP tests use `bryntum.queryAll("gantt").filter(g => !g.isDestroyed)` — after a remount
+  `bryntum.query` can return the destroyed instance.
 - Always pass `providerOptions: modelProviderOptions` (Gemini thinkingLevel "low"); the default
   "medium" thinking stalled tool-calling turns for minutes.
 - PayPal sandbox: the seller app must belong to a **US** sandbox business account — the HU account

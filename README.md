@@ -42,6 +42,7 @@ project automatically on first start. Reset it with `npm run db:seed -- --reset`
 | `npm run db:generate` | Generate a Drizzle migration after editing `src/db/schema.ts` |
 | `npm run smoke:paypal` | Creates a draft invoice in the PayPal sandbox via the Agent Toolkit |
 | `npm run smoke:ai` | Gemini calls a PayPal toolkit tool (`list_invoices`) |
+| `npm run eval:architect` | Runs 3 sample briefs through the AI architect and checks plan invariants |
 
 ## Deploy (Render)
 
@@ -52,6 +53,12 @@ the seeded demo whenever the instance restarts.
 
 ## How it works
 
+- **AI Plan Architect** — `/projects/new` takes a client brief, budget and start date.
+  Gemini returns a structured plan (`generateText` + `Output.object`), which is
+  normalized server-side (acyclic dependencies, bounded durations, milestone amounts
+  that sum exactly to the budget) and opened on the Gantt as an *AI draft*. You can
+  edit it, regenerate it with feedback ("shorter discovery, add training"), or accept it.
+  Every milestone except the last is a payment gate for the next phase.
 - **Bryntum Gantt** loads and saves through Bryntum's CrudManager protocol
   (`/api/projects/[id]/gantt`: `GET` load, `POST` sync) backed by SQLite (Drizzle ORM).
   Edits auto-sync; client-side phantom ids are mapped to database ids server-side.
@@ -63,7 +70,7 @@ the seeded demo whenever the instance restarts.
 - Next.js 16 (App Router, TypeScript), Tailwind CSS
 - Bryntum Gantt 7.3 (public npm trial package)
 - SQLite (better-sqlite3) + Drizzle ORM
-- PayPal Agent Toolkit + Vercel AI SDK v6 + Google Gemini 3.8 Flash
+- PayPal Agent Toolkit + Vercel AI SDK v6 + Google Gemini (3.5 Flash, falling back to 3.8 Flash)
 - Hosting: Render
 
 ## License

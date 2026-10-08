@@ -77,6 +77,20 @@ export const dependencies = sqliteTable("dependencies", {
   lagUnit: text("lag_unit").notNull().default("day"),
 });
 
+export const agentLog = sqliteTable("agent_log", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
+  ts: text("ts")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+  actor: text("actor", { enum: ["architect", "copilot", "automation"] }).notNull(),
+  action: text("action").notNull(),
+  payloadJson: text("payload_json"),
+  resultJson: text("result_json"),
+  durationMs: integer("duration_ms"),
+  ok: integer("ok", { mode: "boolean" }).notNull(),
+});
+
 export type Project = typeof projects.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
