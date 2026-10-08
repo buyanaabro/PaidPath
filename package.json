@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "smoke:paypal": "tsx scripts/smoke-paypal.ts",
-    "smoke:ai": "tsx scripts/smoke-ai.ts"
+    "smoke:ai": "tsx scripts/smoke-ai.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:seed": "tsx scripts/seed.ts",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@ai-sdk/google": "3.0.130",
@@ -17,6 +20,8 @@
     "@bryntum/gantt-react": "7.3.7",
     "@paypal/agent-toolkit": "1.11.0",
     "ai": "6.0.299",
+    "better-sqlite3": "13.0.3",
+    "drizzle-orm": "0.45.3",
     "next": "16.3.8",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -25,9 +30,11 @@
   "devDependencies": {
     "@next/env": "16.3.8",
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "9.6.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
     "tailwindcss": "^4",
@@ -35,6 +42,6 @@
     "typescript": "^5"
   },
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22"
   }
 }

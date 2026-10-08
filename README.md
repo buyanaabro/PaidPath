@@ -15,7 +15,7 @@ the plan recovers the moment a payment lands.
 
 ## Quick start
 
-Requirements: Node.js 20.9+, a free [PayPal Developer](https://developer.paypal.com/)
+Requirements: Node.js 22+, a free [PayPal Developer](https://developer.paypal.com/)
 sandbox app, and a free [Gemini API key](https://aistudio.google.com/).
 
 PayPal sandbox setup: create a **US** sandbox business account, create a REST app owned
@@ -28,17 +28,41 @@ cp .env.example .env.local   # fill in PayPal sandbox + Gemini credentials
 npm run dev                  # http://localhost:3000
 ```
 
-Smoke tests (hit the real PayPal sandbox):
+The SQLite database (`data/paidpath.db`) is created, migrated and seeded with a demo
+project automatically on first start. Reset it with `npm run db:seed -- --reset`.
 
-```bash
-npm run smoke:paypal   # creates a draft sandbox invoice via the Agent Toolkit
-npm run smoke:ai       # Gemini calls a PayPal toolkit tool (list_invoices)
-```
+## Scripts
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` / `build` / `start` | Next.js dev server / production build / production server |
+| `npm test` | Unit tests (Node test runner, in-memory SQLite) |
+| `npm run typecheck`, `npm run lint` | Type and lint checks |
+| `npm run db:seed [-- --reset]` | Seed the demo project (optionally wiping all data first) |
+| `npm run db:generate` | Generate a Drizzle migration after editing `src/db/schema.ts` |
+| `npm run smoke:paypal` | Creates a draft invoice in the PayPal sandbox via the Agent Toolkit |
+| `npm run smoke:ai` | Gemini calls a PayPal toolkit tool (`list_invoices`) |
+
+## Deploy (Render)
+
+`render.yaml` defines a free Render web service. In the Render dashboard choose
+**New → Blueprint**, connect this repository and fill in the four secret environment
+variables. The free instance's disk is ephemeral, so the hosted demo data resets to
+the seeded demo whenever the instance restarts.
+
+## How it works
+
+- **Bryntum Gantt** loads and saves through Bryntum's CrudManager protocol
+  (`/api/projects/[id]/gantt`: `GET` load, `POST` sync) backed by SQLite (Drizzle ORM).
+  Edits auto-sync; client-side phantom ids are mapped to database ids server-side.
+- **PayPal Agent Toolkit** tools are exposed to the AI (Vercel AI SDK v6) and called
+  directly for deterministic flows.
 
 ## Stack
 
 - Next.js 16 (App Router, TypeScript), Tailwind CSS
 - Bryntum Gantt 7.3 (public npm trial package)
+- SQLite (better-sqlite3) + Drizzle ORM
 - PayPal Agent Toolkit + Vercel AI SDK v6 + Google Gemini 3.8 Flash
 - Hosting: Render
 

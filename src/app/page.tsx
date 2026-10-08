@@ -1,22 +1,18 @@
-import GanttClient from "@/components/gantt/GanttClient";
+import { asc } from "drizzle-orm";
+import { notFound, redirect } from "next/navigation";
+import { connection } from "next/server";
+import { getDb } from "@/db/client";
+import { projects } from "@/db/schema";
 
-export default function Home() {
-  return (
-    <main className="flex h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-neutral-200 px-6 py-3">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">PaidPath</h1>
-          <p className="text-xs text-neutral-500">
-            The project plan that reacts to money.
-          </p>
-        </div>
-        <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
-          PayPal sandbox
-        </span>
-      </header>
-      <section className="min-h-0 flex-1">
-        <GanttClient />
-      </section>
-    </main>
-  );
+// Temporary entry point until the landing page (Phase 7): open the first project.
+export default async function Home() {
+  await connection();
+  const first = getDb()
+    .select({ id: projects.id })
+    .from(projects)
+    .orderBy(asc(projects.id))
+    .limit(1)
+    .get();
+  if (!first) notFound();
+  redirect(`/projects/${first.id}`);
 }

@@ -12,8 +12,8 @@ import {
   type BryntumGanttProps,
 } from "@bryntum/gantt-react";
 import { useRef } from "react";
-import { demoDependencies, demoProjectStart, demoTasks } from "@/lib/demo-plan";
 import { PaidTaskModel } from "./PaidTaskModel";
+import type { SaveStatus } from "./save-status";
 
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -54,17 +54,36 @@ const ganttProps: BryntumGanttProps = {
       : "",
 };
 
-export default function PlanGantt() {
+type Props = {
+  projectId: number;
+  onSaveStatus?: (status: SaveStatus) => void;
+};
+
+export default function PlanGantt({ projectId, onSaveStatus }: Props) {
   const project = useRef<BryntumGanttProjectModel>(null);
+  const url = `/api/projects/${projectId}/gantt`;
+  const retry = (action: "load" | "sync") => () => {
+    void project.current?.instance?.[action]();
+  };
 
   return (
     <>
       <BryntumGanttProjectModel
         ref={project}
         taskModelClass={PaidTaskModel}
-        startDate={demoProjectStart}
-        tasks={demoTasks}
-        dependencies={demoDependencies}
+        loadUrl={url}
+        syncUrl={url}
+        autoLoad
+        autoSync
+        validateResponse={process.env.NODE_ENV !== "production"}
+        onBeforeSync={() => onSaveStatus?.({ state: "saving" })}
+        onSync={() => onSaveStatus?.({ state: "saved" })}
+        onSyncFail={() =>
+          onSaveStatus?.({ state: "error", message: "Save failed", retry: retry("sync") })
+        }
+        onLoadFail={() =>
+          onSaveStatus?.({ state: "error", message: "Couldn't load plan", retry: retry("load") })
+        }
       />
       <BryntumGantt {...ganttProps} project={project} />
     </>

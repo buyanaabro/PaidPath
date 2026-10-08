@@ -11,7 +11,18 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # PaidPath project notes
 
 - Plan of record: `~/.devin/plans/plan-cf3fbd70f25ca2c1.md` (phases, acceptance criteria, decisions).
-- Verify: `npm run typecheck && npm run lint && npm run build`.
+- Verify: `npm run typecheck && npm run lint && npm test && npm run build`. `typecheck` runs
+  `next typegen` first (needed for `PageProps` / `RouteContext` route types).
+- DB: SQLite via better-sqlite3 + Drizzle (Node ≥22). Schema `src/db/schema.ts`; after edits run
+  `npm run db:generate -- --name <change>` and commit `drizzle/`. `getDb()` migrates + seeds on first use.
+  Every page/route that reads the DB must `await connection()` first (sync reads are prerender-eligible).
+  Reset local data: `npm run db:seed -- --reset`. Tests use `createDb(":memory:")`.
+- Gantt persistence: Bryntum CrudManager at `/api/projects/[id]/gantt` (`src/server/gantt/crud.ts`).
+  Real sync payloads send dependency endpoints as `from`/`fromEvent`/`fromTask` (all three), dates with
+  the browser's TZ offset (stored verbatim), plus a `project` section (ignored).
+- Real-browser checks: `node scripts/dev/browser-eval.mjs <url> <file.js> [waitMs]` runs JS in headless
+  Brave with CDP (async; `return` a value). Get the Gantt via `bryntum.query("gantt")`. Kill stale
+  browsers with `pkill -f paidpath-cdp` if it hangs.
 - Smoke tests against real sandbox: `npm run smoke:paypal`, `npm run smoke:ai` (need `.env.local`).
 - Render check without a GUI: run `npm run dev`, then headless Brave screenshot:
   `"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" --headless=new --window-size=1440,900 --virtual-time-budget=15000 --screenshot=/tmp/shot.png http://localhost:3000`

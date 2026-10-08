@@ -1,6 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { ComponentProps } from "react";
+import type PlanGanttComponent from "./PlanGantt";
 
 // Bryntum touches `window` on import, so it must never render on the server.
 const PlanGantt = dynamic(() => import("./PlanGantt"), {
@@ -12,6 +14,6 @@ const PlanGantt = dynamic(() => import("./PlanGantt"), {
   ),
 });
 
-export default function GanttClient() {
-  return <PlanGantt />;
+export default function GanttClient(props: ComponentProps<typeof PlanGanttComponent>) {
+  return <PlanGantt {...props} />;
 }
