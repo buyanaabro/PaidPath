@@ -5,6 +5,7 @@ import ProjectWorkspace from "@/components/workspace/ProjectWorkspace";
 import { getDb } from "@/db/client";
 import { tasks } from "@/db/schema";
 import { formatMoney } from "@/lib/format";
+import { invoicesSnapshot } from "@/server/invoicing/http";
 import { getProject } from "@/server/projects";
 
 export default async function ProjectPage({ params }: PageProps<"/projects/[projectId]">) {
@@ -28,7 +29,9 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[proj
         clientName: project.clientName,
         status: project.status,
         total: formatMoney(Number(total?.cents ?? 0), project.currency),
+        currency: project.currency,
       }}
+      initialInvoices={invoicesSnapshot(id)}
     />
   );
 }

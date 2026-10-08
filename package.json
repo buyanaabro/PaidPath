@@ -13,7 +13,8 @@
     "db:generate": "drizzle-kit generate",
     "db:seed": "tsx scripts/seed.ts",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
-    "eval:architect": "tsx scripts/eval-architect.ts"
+    "eval:architect": "tsx scripts/eval-architect.ts",
+    "smoke:invoice-flow": "tsx scripts/smoke-invoice-flow.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "3.0.130",

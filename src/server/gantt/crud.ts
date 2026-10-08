@@ -83,7 +83,10 @@ const asNullableString = (v: unknown) => (v === null || v === undefined ? null :
 const asNullableNumber = (v: unknown) =>
   v === null || v === undefined || v === "" || Number.isNaN(Number(v)) ? null : Number(v);
 
-/** Maps whitelisted Bryntum task fields to DB columns; unknown engine fields are ignored. */
+/**
+ * Maps whitelisted Bryntum task fields to DB columns; unknown engine fields are ignored.
+ * `invoiceStatus` is deliberately absent: it is written only by the invoicing service.
+ */
 function taskValues(row: WireRow): Partial<NewTask> {
   const values: Partial<NewTask> = {};
   const has = (key: string) => key in row;
@@ -99,7 +102,6 @@ function taskValues(row: WireRow): Partial<NewTask> {
   if (has("manuallyScheduled")) values.manuallyScheduled = Boolean(row.manuallyScheduled);
   if (has("expanded")) values.expanded = Boolean(row.expanded);
   if (has("parentIndex")) values.orderIndex = asNullableNumber(row.parentIndex) ?? 0;
-  if (has("invoiceStatus") && row.invoiceStatus) values.invoiceStatus = String(row.invoiceStatus);
   if (has("paymentGate")) values.paymentGate = Boolean(row.paymentGate);
   if (has("amount")) {
     const amount = asNullableNumber(row.amount);

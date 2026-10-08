@@ -38,7 +38,7 @@ describe("loadProject", () => {
     assert.equal(flatten(response.tasks.rows).length, 14);
     const milestone = (phases[1].children as WireRow[])[2];
     assert.equal(milestone.amount, 2500);
-    assert.equal(milestone.invoiceStatus, "sent");
+    assert.equal(milestone.invoiceStatus, "none");
     assert.equal(response.dependencies.rows.length, 9);
     assert.equal(response.project.startDate, "2026-11-02");
   });

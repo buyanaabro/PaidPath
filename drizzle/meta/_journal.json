@@ -15,6 +15,13 @@
       "when": 1791450098138,
       "tag": "0001_agent_log",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791457681136,
+      "tag": "0002_invoices",
+      "breakpoints": true
     }
   ]
 }

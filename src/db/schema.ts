@@ -77,6 +77,36 @@ export const dependencies = sqliteTable("dependencies", {
   lagUnit: text("lag_unit").notNull().default("day"),
 });
 
+export const INVOICE_STATUSES = ["draft", "sent", "paid", "cancelled", "refunded"] as const;
+export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
+
+export const invoices = sqliteTable("invoices", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  // Set null so regenerating a plan never erases invoice history.
+  taskId: integer("task_id").references(() => tasks.id, { onDelete: "set null" }),
+  paypalInvoiceId: text("paypal_invoice_id").notNull().unique(),
+  invoiceNumber: text("invoice_number"),
+  milestoneName: text("milestone_name").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  paypalStatus: text("paypal_status").notNull(),
+  status: text("status", { enum: INVOICE_STATUSES }).notNull(),
+  note: text("note"),
+  noteSource: text("note_source", { enum: ["ai", "template"] }),
+  payUrl: text("pay_url"),
+  invoicerUrl: text("invoicer_url"),
+  qrPng: text("qr_png"),
+  sentAt: text("sent_at"),
+  dueAt: text("due_at"),
+  paidAt: text("paid_at"),
+  lastReminderAt: text("last_reminder_at"),
+  reminderCount: integer("reminder_count").notNull().default(0),
+  ...timestamps,
+});
+
 export const agentLog = sqliteTable("agent_log", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
@@ -95,3 +125,4 @@ export type Project = typeof projects.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type Dependency = typeof dependencies.$inferSelect;
+export type Invoice = typeof invoices.$inferSelect;

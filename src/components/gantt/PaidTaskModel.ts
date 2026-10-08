@@ -13,7 +13,8 @@ export class PaidTaskModel extends TaskModel {
 
   static fields = [
     { name: "amount", type: "number" },
-    { name: "invoiceStatus", type: "string", defaultValue: "none" },
+    // Owned by the server (PayPal is the source of truth) — never synced back.
+    { name: "invoiceStatus", type: "string", defaultValue: "none", persist: false },
     { name: "paymentGate", type: "boolean", defaultValue: false },
   ];
 

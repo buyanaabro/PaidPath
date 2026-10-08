@@ -1,6 +1,8 @@
 // Dev tool: open a URL in headless Brave/Chrome, evaluate a JS expression in the page
 // (awaiting promises), print the result and page console output.
 // Usage: node scripts/dev/browser-eval.mjs <url> <expression-file.js> [waitMs]
+// In the page script, `__cdpInput(JSON.stringify({ x, y, button: "right" }))` sends a trusted
+// mouse click (needed for widgets like Bryntum menus that ignore synthetic events).
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -46,6 +48,12 @@ try {
     if (msg.id && pending.has(msg.id)) {
       pending.get(msg.id)(msg);
       pending.delete(msg.id);
+    } else if (msg.method === "Runtime.bindingCalled" && msg.params.name === "__cdpInput") {
+      // Page scripts can request trusted mouse input: __cdpInput(JSON.stringify({ x, y, button }))
+      const { x, y, button = "left" } = JSON.parse(msg.params.payload);
+      for (const type of ["mousePressed", "mouseReleased"]) {
+        send("Input.dispatchMouseEvent", { type, x, y, button, clickCount: 1 });
+      }
     } else if (msg.method === "Runtime.consoleAPICalled") {
       const text = msg.params.args.map((a) => a.value ?? a.description ?? "").join(" ");
       console.log(`[page ${msg.params.type}]`, text);
@@ -61,6 +69,7 @@ try {
     });
 
   await send("Runtime.enable");
+  await send("Runtime.addBinding", { name: "__cdpInput" });
   await send("Page.enable");
   await send("Page.navigate", { url });
   await sleep(Number(waitMs));

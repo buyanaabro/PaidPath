@@ -43,6 +43,17 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `npm run eval:architect` = real Gemini regression check. Server actions in `src/app/projects/actions.ts`.
 - Server actions in client components: drive disabled/busy UI with explicit state, not
   `useTransition` pending — remounting the Gantt inside a transition kept it pending for 15s+.
+- Invoicing: `src/server/invoicing/` (`service.ts` takes injectable `{ callTool, draftNote, now }` deps
+  for tests). `tasks.invoiceStatus` is server-owned: `persist: false` on `PaidTaskModel` and excluded from
+  the CrudManager whitelist; the client mirrors it from `/api/projects/[id]/invoices` `taskStatuses`.
+  PayPal facts: create_invoice has no due date (we store `dueAt` = sent + 14d); the QR tool returns a
+  multipart body (`extractQrPng`); `record_payment_for_invoice` → `MARKED_AS_PAID`.
+- Bryntum 7 menus use `.b-menu-item`; menus ignore synthetic DOM events — in CDP tests use the
+  `__cdpInput` binding (trusted mouse input) and scroll the task into view first (the ledger panel can
+  cover it). Renderers that return HTML need `htmlEncode: false` on the column.
+- React Compiler lint (`react-hooks/*`) is strict: no setState in effects (pass initial data from the
+  server page instead), no `Date.now()` in render (compute on the server), no ref access while building
+  Bryntum configs (one justified disable in `PlanGantt.tsx`).
 - `logAgentRun` swallows its own errors (audit logging must never break the action).
 - A long-running `npm run dev` keeps its DB connection from before new migrations — restart dev after
   `db:generate` (fresh processes, e.g. Render deploys, migrate automatically).

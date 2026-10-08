@@ -42,6 +42,7 @@ project automatically on first start. Reset it with `npm run db:seed -- --reset`
 | `npm run db:generate` | Generate a Drizzle migration after editing `src/db/schema.ts` |
 | `npm run smoke:paypal` | Creates a draft invoice in the PayPal sandbox via the Agent Toolkit |
 | `npm run smoke:ai` | Gemini calls a PayPal toolkit tool (`list_invoices`) |
+| `npm run smoke:invoice-flow` | Full sandbox invoice lifecycle: create → send → QR → reminder → record payment → PAID |
 | `npm run eval:architect` | Runs 3 sample briefs through the AI architect and checks plan invariants |
 
 ## Deploy (Render)
@@ -59,6 +60,14 @@ the seeded demo whenever the instance restarts.
   that sum exactly to the budget) and opened on the Gantt as an *AI draft*. You can
   edit it, regenerate it with feedback ("shorter discovery, add training"), or accept it.
   Every milestone except the last is a payment gate for the next phase.
+- **PayPal invoicing loop** — every priced milestone can be invoiced from the Gantt
+  (Invoice column button or the task context menu). PaidPath drafts a client note with
+  Gemini (template fallback), then uses the PayPal Agent Toolkit to `create_invoice`,
+  `send_invoice`, `get_invoice` and `generate_invoice_qr_code`. Milestone diamonds turn
+  grey → blue (awaiting payment) → green (paid). The invoice ledger (Bryntum Grid) under
+  the timeline offers the client pay page, the PayPal QR code, `send_invoice_reminder`,
+  and a sandbox-only "Record payment" (`record_payment_for_invoice`). Open invoices are
+  polled every 15s, so a client paying on PayPal shows up without a reload.
 - **Bryntum Gantt** loads and saves through Bryntum's CrudManager protocol
   (`/api/projects/[id]/gantt`: `GET` load, `POST` sync) backed by SQLite (Drizzle ORM).
   Edits auto-sync; client-side phantom ids are mapped to database ids server-side.
