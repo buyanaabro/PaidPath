@@ -19,11 +19,12 @@ const proc = spawn(browser, [
   "about:blank",
 ], { stdio: "ignore" });
 
+const timeoutMs = Number(process.env.BROWSER_EVAL_TIMEOUT_MS ?? 60_000);
 const watchdog = setTimeout(() => {
-  console.error("TIMEOUT after 60s");
+  console.error(`TIMEOUT after ${timeoutMs / 1000}s`);
   proc.kill();
   process.exit(1);
-}, 60_000);
+}, timeoutMs);
 
 try {
   let target;
