@@ -26,4 +26,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   AI SDK v4 fails with 400). The PayPal toolkit is built on AI SDK v4 and keeps its own nested `ai@4`;
   `getPayPalTools()` in `src/lib/paypal.ts` re-wraps its tools for v6. Use `callPayPalTool()` for
   deterministic (non-LLM) PayPal calls — it throws `PayPalToolError` on `{ ok: false }` results.
+- Always pass `providerOptions: modelProviderOptions` (Gemini thinkingLevel "low"); the default
+  "medium" thinking stalled tool-calling turns for minutes.
+- PayPal sandbox: the seller app must belong to a **US** sandbox business account — the HU account
+  could not get the Invoicing scope. Check scopes: request a client_credentials token and look for
+  `services/invoicing` and `services/reporting` in `scope`.
 - `zod@3` (toolkit schemas are zod v3). New deps: pick versions published ≥7 days ago.

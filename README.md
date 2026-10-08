@@ -18,6 +18,10 @@ the plan recovers the moment a payment lands.
 Requirements: Node.js 20.9+, a free [PayPal Developer](https://developer.paypal.com/)
 sandbox app, and a free [Gemini API key](https://aistudio.google.com/).
 
+PayPal sandbox setup: create a **US** sandbox business account, create a REST app owned
+by it, and enable the app's **Invoicing** and **Transaction search** features. Use the
+default sandbox *personal* account's email as `PAYPAL_SANDBOX_BUYER_EMAIL`.
+
 ```bash
 npm install
 cp .env.example .env.local   # fill in PayPal sandbox + Gemini credentials

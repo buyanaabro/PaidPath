@@ -2,7 +2,7 @@
 // Run: npm run smoke:ai
 import { loadEnvConfig } from "@next/env";
 import { generateText, stepCountIs } from "ai";
-import { getModel } from "../src/lib/ai";
+import { getModel, modelProviderOptions } from "../src/lib/ai";
 import { getPayPalTools } from "../src/lib/paypal";
 
 loadEnvConfig(process.cwd());
@@ -11,7 +11,14 @@ async function main() {
   const { text, steps } = await generateText({
     model: getModel(),
     tools: getPayPalTools(),
+    providerOptions: modelProviderOptions,
     stopWhen: stepCountIs(4),
+    abortSignal: AbortSignal.timeout(180_000),
+    onStepFinish: ({ toolCalls, finishReason }) =>
+      console.log(
+        `step done (${finishReason}):`,
+        toolCalls.map((c) => c.toolName),
+      ),
     prompt:
       "List my 5 most recent PayPal invoices and summarize their statuses in one sentence.",
   });
