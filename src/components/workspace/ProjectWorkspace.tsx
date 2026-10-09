@@ -5,20 +5,23 @@ import ActivityClient from "@/components/activity/ActivityClient";
 import { useActivity } from "@/components/activity/useActivity";
 import AppHeader from "@/components/AppHeader";
 import GanttClient from "@/components/gantt/GanttClient";
-import type { GateState, ScheduleInfo } from "@/components/gantt/PlanGantt";
+import type { GanttApi, GateState, ScheduleInfo } from "@/components/gantt/PlanGantt";
 import { SaveStatusPill, type SaveStatus } from "@/components/gantt/save-status";
 import CashChart from "@/components/invoices/CashChart";
 import LedgerClient from "@/components/invoices/LedgerClient";
 import QrDialog from "@/components/invoices/QrDialog";
+import SendInvoiceDialog from "@/components/invoices/SendInvoiceDialog";
 import {
   useInvoices,
   type InvoiceAction,
   type InvoicesSnapshot,
 } from "@/components/invoices/useInvoices";
+import { discountView } from "@/lib/discount";
 import { formatDate, formatMoney } from "@/lib/format";
 import { daysBetween } from "@/lib/gates";
 import type { ActivityItem } from "@/server/activity";
 import type { InvoiceView } from "@/server/invoicing/service";
+import ClientViewButton from "./ClientViewButton";
 import DemoClock, { type ClockState } from "./DemoClock";
 import PlanDraftBanner from "./PlanDraftBanner";
 
@@ -47,6 +50,8 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
   const [planVersion, setPlanVersion] = useState(0);
   const [focusTask, setFocusTask] = useState<{ id: number } | null>(null);
   const [qrInvoice, setQrInvoice] = useState<InvoiceView | null>(null);
+  const [sending, setSending] = useState<{ taskId: number; name: string; amountCents: number; isGate: boolean } | null>(null);
+  const [ganttApi, setGanttApi] = useState<GanttApi | null>(null);
   const [ledgerHeight, setLedgerHeight] = useState(LEDGER_DEFAULT);
   const [ledgerOpen, setLedgerOpen] = useState(true);
   const [tab, setTab] = useState<"invoices" | "activity">("invoices");
@@ -83,6 +88,10 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
         dueAt: invoice.dueAt,
         paidAt: invoice.paidAt,
         overdue: invoice.overdue,
+        discount: (() => {
+          const view = discountView(invoice, clock.today);
+          return view?.state === "active" ? { percent: view.percent, until: view.until } : null;
+        })(),
       })),
     }),
     [clock, invoices, project.paymentTermsDays],
@@ -92,14 +101,19 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
 
   const runAction = useCallback(
     (action: InvoiceAction, invoice: InvoiceView | undefined, taskId: number, name: string) => {
-      if (action === "send") return void invoicesApi.send(taskId, name);
+      if (action === "send") {
+        // Confirm in the send dialog (with the early-payment discount suggestion).
+        const milestone = ganttApi?.milestone(taskId);
+        if (!milestone) return void invoicesApi.send(taskId, name);
+        return setSending({ taskId, ...milestone });
+      }
       if (!invoice) return;
       if (action === "remind") return void invoicesApi.remind(invoice.id);
       if (action === "record-payment") return void invoicesApi.recordPayment(invoice.id);
       if (action === "qr") return setQrInvoice(invoice);
       if (action === "pay-page" && invoice.payUrl) window.open(invoice.payUrl, "_blank", "noopener");
     },
-    [invoicesApi],
+    [invoicesApi, ganttApi],
   );
 
   const latestInvoiceFor = (taskId: number) =>
@@ -130,7 +144,7 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
   const totals = invoices.reduce(
     (sum, invoice) => {
       if (invoice.status === "sent") sum.outstanding += invoice.amountCents;
-      if (invoice.status === "paid") sum.paid += invoice.amountCents;
+      if (invoice.status === "paid") sum.paid += invoice.paidAmountCents ?? invoice.amountCents;
       return sum;
     },
     { outstanding: 0, paid: 0 },
@@ -147,6 +161,7 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
             invoicesApi.replaceSnapshot(snapshot);
           }}
         />
+        {project.status === "active" && <ClientViewButton projectId={project.id} />}
         <SaveStatusPill status={saveStatus} />
       </AppHeader>
       <div className="flex items-end justify-between gap-4 border-b border-neutral-200 px-6 py-3">
@@ -206,6 +221,7 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
             focusTaskId={focusTask}
             client={client}
             onCopilotUpdate={onCopilotUpdate}
+            onReady={setGanttApi}
           />
         </div>
 
@@ -291,6 +307,7 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
               <div className="pp-ledger min-w-0 flex-1">
                 <LedgerClient
                   invoices={invoices}
+                  today={clock.today}
                   busy={Boolean(busy)}
                   onAction={(action, invoice) =>
                     runAction(action, invoice, invoice.taskId ?? 0, invoice.milestoneName)
@@ -303,6 +320,21 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
         </div>
       </section>
 
+      {sending && (
+        <SendInvoiceDialog
+          milestone={sending}
+          client={client}
+          termsDays={project.paymentTermsDays}
+          today={clock.today}
+          currency={project.currency}
+          api={ganttApi}
+          onCancel={() => setSending(null)}
+          onSend={(discount) => {
+            void invoicesApi.send(sending.taskId, sending.name, discount);
+            setSending(null);
+          }}
+        />
+      )}
       {qrInvoice && (
         <QrDialog projectId={project.id} invoice={qrInvoice} onClose={() => setQrInvoice(null)} />
       )}

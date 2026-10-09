@@ -56,13 +56,27 @@ export function listActivity(db: Db, projectId: number, options: { afterId?: num
         case "invoice_milestone":
           return `Sent PayPal invoice for “${taskNames.get(Number(payload.taskId)) ?? "a milestone"}”${
             payload.amountCents ? ` (${formatMoney(Number(payload.amountCents))})` : ""
-          }${result.noteSource ? `, ${result.noteSource === "ai" ? "AI-written" : "template"} note` : ""}`;
+          }${result.noteSource ? `, ${result.noteSource === "ai" ? "AI-written" : "template"} note` : ""}${
+            (payload.discount as { percent?: number } | null)?.percent
+              ? `, ${(payload.discount as { percent: number }).percent}% early-payment discount until ${String((payload.discount as { until?: string }).until)}`
+              : ""
+          }`;
         case "send_reminder":
           return `Sent payment reminder ${result.reminderCount ? `#${result.reminderCount} ` : ""}for ${invoiceLabel(payload.invoiceId)}${
             payload.noteSource === "copilot" ? ", note written by the copilot" : ""
           }`;
         case "record_payment":
-          return `Recorded a sandbox payment for ${invoiceLabel(payload.invoiceId)}`;
+          return `Recorded a sandbox payment for ${invoiceLabel(payload.invoiceId)}${
+            result.discountTaken && result.paidCents ? ` — ${formatMoney(Number(result.paidCents))}, early-payment discount taken` : ""
+          }`;
+        case "discount_expired":
+          return `Discount window closed for ${invoiceLabel(payload.invoiceId)} — PayPal invoice updated to ${
+            result.amountCents ? formatMoney(Number(result.amountCents)) : "the full amount"
+          }`;
+        case "portal_viewed":
+          return "Client opened the project portal";
+        case "portal_link_rotated":
+          return "Client portal link replaced — the old link no longer works";
         case "invoice_status_changed":
           return `PayPal reports ${invoiceLabel(payload.invoiceId)} is now ${String(result.to ?? "updated")}`;
         case "clock_changed":

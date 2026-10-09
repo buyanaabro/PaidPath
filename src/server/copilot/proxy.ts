@@ -30,6 +30,8 @@ export type PromptRequest = {
   host: string | null;
   secFetchSite: string | null;
   rawBody: string;
+  /** Public origin, for the client-portal link in the context. */
+  baseUrl?: string;
 };
 
 type Result = { status: number; json: unknown };
@@ -122,7 +124,7 @@ export async function handlePrompt(req: PromptRequest, deps: PromptDeps): Promis
   if (typeof body.model !== "string" || !deps.allowedModels.includes(body.model)) {
     return error(400, "Unknown model.");
   }
-  const context = buildCopilotContext(deps.db, req.projectId, deps.now());
+  const context = buildCopilotContext(deps.db, req.projectId, deps.now(), { baseUrl: req.baseUrl });
   if (!context) return error(404, "Project not found.");
   if (!deps.limiter.take(req.visitor, deps.now().getTime())) return notice(MESSAGES.busy);
 

@@ -14,6 +14,15 @@ export function modelChain() {
   ];
 }
 
+/**
+ * The copilot makes several short tool-calling requests per question, so latency matters
+ * more than depth: Flash-Lite answered in ~1 s in testing (3.8 Flash took 20–35 s on Render).
+ * It also leaves 3.5 Flash's free quota for plan generation.
+ */
+export function copilotModelChain() {
+  return [...new Set([LAST_RESORT_MODEL, ...modelChain()])];
+}
+
 export function getModel(modelId = modelChain()[0]) {
   return google(modelId);
 }

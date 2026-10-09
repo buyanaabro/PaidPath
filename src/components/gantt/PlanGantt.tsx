@@ -39,6 +39,8 @@ import {
   type IsoDate,
 } from "@/lib/gates";
 import { PaidTaskModel } from "./PaidTaskModel";
+import { discountBenefit } from "./simulate";
+import { showToday } from "./today-line";
 import {
   applyPaymentGates,
   baselineFinish,
@@ -75,7 +77,18 @@ export type GateState = {
   today: IsoDate;
   simulated: boolean;
   termsDays: number;
-  invoices: (GateInvoice & { taskId: number | null; overdue: boolean })[];
+  invoices: (GateInvoice & {
+    taskId: number | null;
+    overdue: boolean;
+    /** Active early-payment discount, if any. */
+    discount?: { percent: number; until: IsoDate } | null;
+  })[];
+};
+
+/** What the workspace can ask the live plan (send dialog suggestions). */
+export type GanttApi = {
+  milestone: (taskId: number) => { name: string; amountCents: number; isGate: boolean } | null;
+  discountBenefit: (taskId: number, windowDays: number) => ReturnType<typeof discountBenefit>;
 };
 
 export type ScheduleInfo = {
@@ -115,6 +128,7 @@ type Options = {
   onInvoiceAction?: (action: InvoiceAction, taskId: number, name: string) => void;
   gate: GateContext;
   overdueTaskIds: Set<number>;
+  discounts: Map<number, { percent: number; until: IsoDate }>;
 };
 
 const isPricedMilestone = (task: PaidTaskModel) => task.isMilestone && Boolean(task.amount);
@@ -217,6 +231,17 @@ function createGanttProps(options: RefObject<Options>): BryntumGanttProps {
         earlyDates: false,
         lateDates: false,
         constraintDate: false,
+        earlyPaymentDiscount: (taskRecord: TaskModel) => {
+          const discount = options.current.discounts.get(Number(taskRecord.id));
+          if (!discount) return null;
+          const [y, m, d] = discount.until.split("-").map(Number);
+          return {
+            startDate: new Date(y, m - 1, d),
+            name: `${discount.percent}% early-payment discount until ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(y, m - 1, d))}`,
+            iconCls: "fa fa-percent",
+            cls: "pp-discount-indicator",
+          };
+        },
         paymentHold: (taskRecord: TaskModel) => {
           const task = taskRecord as PaidTaskModel;
           const gate = task.gateHold ? holdingGate(task, task.project as unknown as ProjectModel) : undefined;
@@ -338,23 +363,6 @@ function afterAiTransaction(project: ProjectModel) {
   });
 }
 
-const TODAY_RANGE_ID = "pp-today";
-
-/** Local-only "Today" line at the project's (possibly simulated) date. */
-function showToday(project: ProjectModel, today: IsoDate, simulated: boolean) {
-  const store = project.timeRangeStore;
-  const [y, m, d] = today.split("-").map(Number);
-  const values = {
-    name: simulated ? "Today (demo clock)" : "Today",
-    startDate: new Date(y, m - 1, d),
-    duration: 0,
-    cls: simulated ? "pp-today pp-today-simulated" : "pp-today",
-  };
-  const existing = store.getById(TODAY_RANGE_ID);
-  if (existing) existing.set(values);
-  else store.add({ id: TODAY_RANGE_ID, ...values });
-}
-
 type Props = {
   projectId: number;
   canInvoice: boolean;
@@ -369,6 +377,7 @@ type Props = {
   client: { name: string; email: string };
   /** Copilot actions changed invoices (and maybe the clock). */
   onCopilotUpdate?: CopilotUpdate;
+  onReady?: (api: GanttApi) => void;
 };
 
 export default function PlanGantt({
@@ -382,6 +391,7 @@ export default function PlanGantt({
   onSchedule,
   client,
   onCopilotUpdate,
+  onReady,
 }: Props) {
   const project = useRef<BryntumGanttProjectModel>(null);
   const gantt = useRef<BryntumGantt>(null);
@@ -395,6 +405,7 @@ export default function PlanGantt({
     onInvoiceAction,
     gate: toGateContext(gate),
     overdueTaskIds: new Set(),
+    discounts: new Map(),
   });
   const latest = useRef({ taskStatuses, gate, canInvoice, onSchedule });
   const queue = useRef<Promise<void>>(Promise.resolve());
@@ -459,8 +470,10 @@ export default function PlanGantt({
       overdueTaskIds: new Set(
         gate.invoices.filter((i) => i.overdue && i.taskId !== null).map((i) => i.taskId!),
       ),
+      discounts: new Map(
+        gate.invoices.filter((i) => i.discount && i.taskId !== null).map((i) => [i.taskId!, i.discount!]),
+      ),
     };
-    reconcile(true);
     // The copilot acts on invoices and the clock, so it only exists for accepted plans.
     const ai = gantt.current?.instance?.features.ai;
     if (ai) {
@@ -469,6 +482,28 @@ export default function PlanGantt({
       if (button && typeof button === "object") button.hidden = !canInvoice;
     }
   }, [projectId, client, onCopilotUpdate, taskStatuses, gate, canInvoice, onInvoiceAction, onSchedule]);
+
+  // Only data changes reschedule. Callback props may change identity on every parent render;
+  // re-running the gates for those fed a render loop (schedule report → parent render → …).
+  useEffect(() => {
+    reconcile(true);
+  }, [taskStatuses, gate, canInvoice]);
+
+  useEffect(() => {
+    const api: GanttApi = {
+      milestone: (taskId) => {
+        const task = project.current?.instance?.taskStore.getById(taskId) as PaidTaskModel | undefined;
+        return task && task.amount
+          ? { name: task.name, amountCents: Math.round(task.amount * 100), isGate: task.paymentGate }
+          : null;
+      },
+      discountBenefit: (taskId, windowDays) => {
+        const instance = project.current?.instance;
+        return instance ? discountBenefit(instance, options.current.gate, taskId, windowDays) : Promise.resolve(null);
+      },
+    };
+    onReady?.(api);
+  }, [onReady]);
 
   useEffect(() => {
     // The demo "Today" line is presentation only — never sync time ranges to the server.

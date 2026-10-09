@@ -12,6 +12,9 @@ export const PAYPAL_ACTIONS = {
     sendReminder: true,
     generateQRC: true,
     recordPayment: true,
+    // Early-payment discounts: PayPal's conditional-rules endpoint returns 500 in sandbox,
+    // so the discount is a line-item discount that PaidPath removes (update) when it expires.
+    update: true,
   },
   transactions: { list: true },
   insights: { get: true },

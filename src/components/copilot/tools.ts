@@ -1,10 +1,18 @@
-import { AIHelper, MessageDialog, ProjectModel, StringHelper, type Model } from "@bryntum/gantt";
-import { PaidTaskModel } from "@/components/gantt/PaidTaskModel";
-import { applyPaymentGates, gateInputFor, type GateContext } from "@/components/gantt/payment-gates";
+import { AIHelper, MessageDialog, StringHelper, type Model, type ProjectModel } from "@bryntum/gantt";
+import type { PaidTaskModel } from "@/components/gantt/PaidTaskModel";
+import { gateInputFor, type GateContext } from "@/components/gantt/payment-gates";
+import { discountBenefit, simulatePayments } from "@/components/gantt/simulate";
 import type { InvoicesSnapshot } from "@/components/invoices/useInvoices";
 import type { ClockState } from "@/components/workspace/DemoClock";
+import {
+  discountAmountCents,
+  parseDiscountOffer,
+  suggestDiscount,
+  suggestedWindow,
+  type DiscountOffer,
+} from "@/lib/discount";
 import { formatDate, formatMoney } from "@/lib/format";
-import { addDays, daysBetween, expectedPayment, localIsoDate, toIsoDate } from "@/lib/gates";
+import { addDays, expectedPayment, toIsoDate } from "@/lib/gates";
 import type { InvoiceView } from "@/server/invoicing/service";
 
 type Tool = ReturnType<typeof AIHelper.createBasicTool>;
@@ -80,42 +88,6 @@ async function findInvoice(env: CopilotEnv, query: string) {
 
 const actionGuard = (env: CopilotEnv) => (env.canAct ? null : AIHelper.error("This plan is still a draft — accept it before sending invoices or changing the clock."));
 
-/**
- * Runs the payment gates on a headless copy of the plan with a hypothetical payment date.
- * The live Gantt is never touched.
- */
-async function simulatePayment(env: CopilotEnv, milestone: PaidTaskModel, days: number) {
-  const live = env.project!;
-  const sim = new ProjectModel({ taskModelClass: PaidTaskModel, startDate: live.startDate });
-  await sim.loadInlineData({
-    calendars: live.calendarManagerStore.toJSON(),
-    tasks: live.taskStore.toJSON(),
-    dependencies: live.dependencyStore.toJSON(),
-  });
-  try {
-    const current = await applyPaymentGates(sim, env.gate);
-    const phaseStarts = () =>
-      new Map(
-        (sim.taskStore.query((t: Model) => !(t as PaidTaskModel).isLeaf) as PaidTaskModel[])
-          .filter((t) => t.startDate)
-          .map((t) => [t.name, localIsoDate(t.startDate as Date)]),
-      );
-    const before = phaseStarts();
-    const expected = expectedPayment(gateInputFor(milestone, env.gate)).date;
-    const paidAt = addDays(expected, days);
-    const invoicesByTask = new Map(env.gate.invoicesByTask);
-    invoicesByTask.set(Number(milestone.id), { status: "paid", dueAt: null, paidAt });
-    const after = await applyPaymentGates(sim, { ...env.gate, invoicesByTask });
-    const phasesMoved = [...phaseStarts()]
-      .filter(([name, start]) => before.get(name) !== start)
-      .map(([name, start]) => ({ phase: name, startNow: before.get(name), startInScenario: start }));
-    const delta = current.finishAfter && after.finishAfter ? daysBetween(current.finishAfter, after.finishAfter) : null;
-    return { expected, paidAt, finishNow: current.finishAfter, finishInScenario: after.finishAfter, delta, phasesMoved };
-  } finally {
-    sim.destroy();
-  }
-}
-
 export function createCopilotTools(getEnv: () => CopilotEnv): Record<string, Tool> {
   return {
     whatIfPaymentDelay: AIHelper.createBasicTool({
@@ -141,17 +113,21 @@ export function createCopilotTools(getEnv: () => CopilotEnv): Record<string, Too
             note: "This milestone is not a payment gate, so a late payment only delays cash, not the schedule.",
           });
         }
-        const sim = await simulatePayment(env, found.task, Math.round(Number(days) || 0));
+        const expected = expectedPayment(gateInputFor(found.task, env.gate)).date;
+        const sim = await simulatePayments(env.project!, env.gate, Number(found.task.id), [
+          addDays(expected, Math.round(Number(days) || 0)),
+        ]);
+        const [scenario] = sim.scenarios;
         return AIHelper.result(
           {
             milestone: bareName(found.task.name),
             amount: money(Math.round((found.task.amount ?? 0) * 100)),
             paymentExpectedNow: sim.expected,
-            paymentInScenario: sim.paidAt,
+            paymentInScenario: scenario.paidAt,
             projectedFinishNow: sim.finishNow,
-            projectedFinishInScenario: sim.finishInScenario,
-            finishChangeDays: sim.delta,
-            phasesMoved: sim.phasesMoved,
+            projectedFinishInScenario: scenario.finish,
+            finishChangeDays: scenario.finishChangeDays,
+            phasesMoved: scenario.phasesMoved,
             note: "Simulation only — the live plan is unchanged.",
           },
           "What-if simulated",
@@ -174,39 +150,107 @@ export function createCopilotTools(getEnv: () => CopilotEnv): Record<string, Too
       },
     }),
 
+    suggestEarlyPaymentDiscount: AIHelper.createBasicTool({
+      description:
+        "For a milestone that is about to be invoiced: simulates how many days sooner the launch would be if the client paid within the early-payment window instead of on the due date, and returns PaidPath's suggested discount. Changes nothing.",
+      available: true,
+      properties: { milestone: { type: "string", description: "Milestone name" } },
+      required: ["milestone"],
+      async fn({ args }) {
+        const env = getEnv();
+        const found = findMilestone(env.project, (args as { milestone: string }).milestone);
+        if (!found.task) return AIHelper.error(found.error!);
+        const windowDays = suggestedWindow(env.termsDays);
+        if (windowDays === null) return AIHelper.error(`${env.termsDays}-day payment terms are too short for an early-payment discount.`);
+        const benefit = await discountBenefit(env.project!, env.gate, Number(found.task.id), windowDays);
+        const amountCents = Math.round((found.task.amount ?? 0) * 100);
+        const suggestion = suggestDiscount({
+          amountCents,
+          isGate: found.task.paymentGate,
+          launchDaysEarlier: benefit?.launchDaysEarlier ?? null,
+          windowDays,
+        });
+        return AIHelper.result({
+          milestone: bareName(found.task.name),
+          amount: money(amountCents),
+          windowDays,
+          launchDaysEarlier: benefit?.launchDaysEarlier ?? null,
+          launchIfPaidEarly: benefit?.finishIfEarly ?? null,
+          launchIfPaidOnDueDate: benefit?.finishOnDue ?? null,
+          recommended: suggestion.recommended,
+          suggestedPercent: suggestion.offer.percent,
+          suggestedDiscount: money(discountAmountCents(amountCents, suggestion.offer.percent)),
+          reason: suggestion.reason,
+          note: "Assumes the invoice is sent today. Nothing was changed.",
+        });
+      },
+    }),
+
     sendInvoice: AIHelper.createBasicTool({
       description:
-        "Creates and sends the real PayPal (sandbox) invoice for a priced milestone to the client. The user must confirm.",
+        "Creates and sends the real PayPal (sandbox) invoice for a priced milestone to the client, optionally with an early-payment discount (only if the user agreed). The user must confirm.",
       available: true,
-      properties: { milestone: { type: "string", description: "Milestone name to invoice" } },
+      properties: {
+        milestone: { type: "string", description: "Milestone name to invoice" },
+        discountPercent: { type: "number", description: "Optional early-payment discount percent (1-10)" },
+        discountDays: { type: "number", description: "Days the discount applies: 3, 7 or 15 (must end before the due date)" },
+      },
       required: ["milestone"],
       async fn({ args }) {
         const env = getEnv();
         const guard = actionGuard(env);
         if (guard) return guard;
+        const { discountPercent, discountDays } = args as { discountPercent?: number; discountDays?: number };
+        let discount: DiscountOffer | null = null;
+        try {
+          discount = discountPercent ? parseDiscountOffer({ percent: discountPercent, days: discountDays ?? suggestedWindow(env.termsDays) }) : null;
+        } catch (error) {
+          return AIHelper.error(error instanceof Error ? error.message : "Invalid discount");
+        }
+        if (discount && discount.days >= env.termsDays) {
+          return AIHelper.error(`The discount window must end before the ${env.termsDays}-day due date.`);
+        }
         const found = findMilestone(env.project, (args as { milestone: string }).milestone);
         if (!found.task) return AIHelper.error(found.error!);
         const task = found.task;
         if (!["none", "cancelled"].includes(task.invoiceStatus)) {
           return AIHelper.error(`"${bareName(task.name)}" already has a ${task.invoiceStatus} invoice.`);
         }
-        const amount = money(Math.round((task.amount ?? 0) * 100));
+        const amountCents = Math.round((task.amount ?? 0) * 100);
+        const amount = money(amountCents);
+        const benefit = discount ? await discountBenefit(env.project!, env.gate, Number(task.id), discount.days) : null;
         const ok = await confirm(
           "Send PayPal invoice?",
           [
             `${bareName(task.name)} — ${amount}`,
             `To ${env.client.name} <${env.client.email}>, due in ${env.termsDays} days.`,
+            ...(discount
+              ? [
+                  `Early-payment discount: ${discount.percent}% (${money(discountAmountCents(amountCents, discount.percent))}) if paid by ${formatDate(addDays(env.gate.today, discount.days))}${
+                    benefit && benefit.launchDaysEarlier > 0 ? ` — launch about ${benefit.launchDaysEarlier} days earlier` : ""
+                  }.`,
+                ]
+              : []),
             "PaidPath drafts a short note with AI and sends the invoice through PayPal (sandbox).",
           ],
           "Send invoice",
         );
         if (!ok) return declined();
         try {
-          const result = await post<InvoicesSnapshot & { invoice: { id: number } }>(`/api/projects/${env.projectId}/invoices`, { taskId: Number(task.id) });
+          const result = await post<InvoicesSnapshot & { invoice: { id: number } }>(`/api/projects/${env.projectId}/invoices`, {
+            taskId: Number(task.id),
+            discount,
+          });
           env.onSnapshot(result);
           const sent = result.invoices.find((i) => i.id === result.invoice.id);
           return AIHelper.result(
-            { invoiceNumber: sent?.invoiceNumber, amount, dueAt: sent?.dueAt ? toIsoDate(sent.dueAt) : null, payUrl: sent?.payUrl },
+            {
+              invoiceNumber: sent?.invoiceNumber,
+              amount,
+              dueAt: sent?.dueAt ? toIsoDate(sent.dueAt) : null,
+              discount: sent?.discountPercent ? { percent: sent.discountPercent, until: sent.discountUntil } : null,
+              payUrl: sent?.payUrl,
+            },
             "Invoice sent",
           );
         } catch (error) {

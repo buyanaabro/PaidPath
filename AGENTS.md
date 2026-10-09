@@ -108,3 +108,25 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - PayPal `get_merchant_insights` throws in sandbox; `list_transactions` works (31-day max range).
 - Agent log actors: `architect`, `copilot`, `automation` (PayPal polling), `user` (UI clicks). The
   Agent activity tab reads `/api/projects/[id]/activity` (`src/server/activity.ts` summaries).
+- Early-payment discounts (Phase 6): PayPal's `create_conditional_rules_for_invoice` returns **500 in
+  sandbox** (any terms/condition) and the inline `payment_term.conditional_rules` field is dropped.
+  PaidPath uses a **line-item discount** (`buildInvoicePayload({ discountPercent })`) and removes it with
+  `update_invoicing` (full replacement, same payload, original `invoice_date`) when the project's today
+  passes `invoices.discountUntil` — `expireDiscounts()` runs on refresh polls and clock changes.
+  Toolkit actions enabled: `invoices.update`. `recordDemoPayment` pays PayPal's current `due_amount`.
+  Shared pure logic: `src/lib/discount.ts` (offer validation, `discountView` states, `suggestDiscount`,
+  `suggestedWindow` < terms). `npm run smoke:discount` reproduces the PayPal behaviour.
+- Headless what-if simulations: `src/components/gantt/simulate.ts` (`simulatePayments`, `discountBenefit`;
+  serialized). Used by the send dialog (via `PlanGantt` `onReady` → `GanttApi`), copilot tools and portal.
+- `PlanGantt` effects: options/props sync runs on every change, but `reconcile()` only on data deps
+  (`taskStatuses`, `gate`, `canInvoice`) — re-running it for callback identity changes fed a render loop
+  that froze the page once the send dialog opened.
+- Client portal: `/p/[token]` (`src/app/p`, `src/components/portal/`), token helpers `src/server/portal.ts`
+  (32-char base64url, `projects.share_token`, rotate via `POST /api/projects/[id]/share {rotate:true}`),
+  snapshot `src/server/portal-snapshot.ts` (client-safe fields only; PayPal refresh throttled 15 s),
+  read-only CrudManager load at `/api/portal/[token]/gantt` (no POST). Portal applies payment gates in
+  memory (never synced). Visits log `actor: "client"`, `portal_viewed`, ≤ 1/hour.
+- Copilot model order: `copilotModelChain()` = flash-lite → 3.5-flash → 3.8-flash (1–4 s/request on
+  lite); plan architect / invoice notes keep `modelChain()`.
+- Flex gotcha: in a column flex layout `flex-1` overrides an explicit `h-[..]` (basis 0) — the portal
+  Gantt uses `flex-none` + height on mobile, `lg:flex-1` on desktop.

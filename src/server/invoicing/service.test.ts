@@ -5,6 +5,7 @@ import { createDb, type Db } from "@/db/client";
 import { agentLog, invoices, projects, tasks } from "@/db/schema";
 import { seedDemoProject } from "@/db/seed";
 import {
+  expireDiscounts,
   invoiceMilestone,
   listProjectInvoices,
   InvoicingError,
@@ -17,7 +18,7 @@ import {
 
 /** In-memory fake of the PayPal toolkit tools the service uses. */
 function fakePayPal() {
-  const store = new Map<string, { status: string }>();
+  const store = new Map<string, { status: string; amount: number; discount: number; paid?: number }>();
   const calls: string[] = [];
   const lastArgs: Record<string, Record<string, unknown>> = {};
   let failNext: string | null = null;
@@ -33,27 +34,40 @@ function fakePayPal() {
     switch (name) {
       case "create_invoice": {
         const newId = `INV2-FAKE-${++counter}`;
-        store.set(newId, { status: "DRAFT" });
+        const item = (args.items as { unit_amount: { value: string }; discount?: { percent: string } }[])[0];
+        store.set(newId, { status: "DRAFT", amount: Number(item.unit_amount.value), discount: Number(item.discount?.percent ?? 0) });
         return { href: `https://api.sandbox.paypal.com/v2/invoicing/invoices/${newId}` };
       }
       case "send_invoice":
         store.get(id)!.status = "SENT";
         return { href: "payer-view" };
-      case "get_invoice":
+      case "get_invoice": {
+        const inv = store.get(id)!;
+        const total = inv.amount * (1 - inv.discount / 100);
         return {
           id,
-          status: store.get(id)!.status,
+          status: inv.status,
           detail: {
             invoice_number: `000${counter}`,
+            invoice_date: "2026-11-20",
             metadata: { recipient_view_url: `https://pay/${id}`, invoicer_view_url: `https://admin/${id}` },
           },
+          due_amount: { currency_code: "USD", value: (inv.paid === undefined ? total : 0).toFixed(2) },
+          ...(inv.paid === undefined ? {} : { payments: { paid_amount: { currency_code: "USD", value: inv.paid.toFixed(2) } } }),
         };
+      }
+      case "update_invoicing": {
+        const update = args.invoice_update as { invoice_id: string; items: { discount?: { percent: string } }[] };
+        store.get(update.invoice_id)!.discount = Number(update.items[0].discount?.percent ?? 0);
+        return { id: update.invoice_id, status: store.get(update.invoice_id)!.status };
+      }
       case "generate_invoice_qr_code":
         return "--b\r\n\r\niVBORw0KGgoFAKE\r\n--b--";
       case "send_invoice_reminder":
         return "";
       case "record_payment_for_invoice":
         store.get(id)!.status = "MARKED_AS_PAID";
+        store.get(id)!.paid = Number((args.amount as { value: string }).value);
         return { payment_id: "EXTR-1" };
       default:
         throw new Error(`unexpected tool ${name}`);
@@ -228,5 +242,61 @@ describe("payments and reminders", () => {
     const invoice = await invoiceMilestone(db, projectId, milestoneId, paypal.deps);
     const other = seedDemoProject(db);
     await assert.rejects(remindInvoice(db, other, invoice.id, paypal.deps), (e: InvoicingError) => e.status === 404);
+  });
+});
+
+describe("early-payment discounts", () => {
+  const sendWithDiscount = () =>
+    invoiceMilestone(db, projectId, milestoneId, { ...paypal.deps, baseUrl: "https://paidpath.test" }, { discount: { percent: 2, days: 7 } });
+
+  test("sends a line-item discount, tracks the window and puts terms + portal link in the note", async () => {
+    const invoice = await sendWithDiscount();
+    const item = (paypal.lastArgs.create_invoice.items as { discount?: { percent: string } }[])[0];
+    assert.deepEqual(item.discount, { percent: "2" });
+    assert.equal(invoice.discountPercent, 2);
+    assert.equal(invoice.discountUntil, "2026-11-27");
+    assert.match(invoice.note!, /Early-payment discount: 2% \(\$50\) is already taken off if you pay by Nov 27, 2026\./);
+    assert.match(invoice.note!, /Follow your project's timeline: https:\/\/paidpath\.test\/p\/[A-Za-z0-9_-]{32}/);
+    const log = db.select().from(agentLog).where(eq(agentLog.action, "invoice_milestone")).get()!;
+    assert.deepEqual(JSON.parse(log.payloadJson!).discount, { percent: 2, until: "2026-11-27" });
+  });
+
+  test("paying inside the window pays the discounted amount", async () => {
+    const invoice = await sendWithDiscount();
+    const paid = await recordDemoPayment(db, projectId, invoice.id, paypal.deps);
+    assert.equal(paypal.lastArgs.record_payment_for_invoice.amount && (paypal.lastArgs.record_payment_for_invoice.amount as { value: string }).value, "2450.00");
+    assert.equal(paid!.status, "paid");
+    assert.equal(paid!.paidAmountCents, 245_000);
+  });
+
+  test("expires the discount on PayPal once the project's today passes the deadline", async () => {
+    const invoice = await sendWithDiscount();
+    assert.equal(await expireDiscounts(db, projectId, paypal.deps), 0);
+    db.update(projects).set({ demoToday: "2026-11-28" }).where(eq(projects.id, projectId)).run();
+    assert.equal(await expireDiscounts(db, projectId, paypal.deps), 1);
+    const update = paypal.lastArgs.update_invoicing as { invoice_update: { invoice_id: string; note: string; invoice_date: string; items: { discount?: unknown }[]; send_to_recipient: boolean } };
+    assert.equal(update.invoice_update.invoice_id, invoice.paypalInvoiceId);
+    assert.equal(update.invoice_update.items[0].discount, undefined);
+    assert.equal(update.invoice_update.invoice_date, "2026-11-20");
+    assert.equal(update.invoice_update.send_to_recipient, true);
+    assert.doesNotMatch(update.invoice_update.note, /Early-payment discount:/);
+    assert.match(update.invoice_update.note, /The early-payment discount offer ended on Nov 27, 2026\./);
+    assert.match(update.invoice_update.note, /Follow your project's timeline/);
+    const stored = db.select().from(invoices).where(eq(invoices.id, invoice.id)).get()!;
+    assert.ok(stored.discountExpiredAt);
+    // Idempotent; a later payment pays the full amount.
+    assert.equal(await expireDiscounts(db, projectId, paypal.deps), 0);
+    const paid = await recordDemoPayment(db, projectId, invoice.id, paypal.deps);
+    assert.equal(paid!.paidAmountCents, 250_000);
+  });
+
+  test("does not touch an invoice that PayPal already reports as paid", async () => {
+    const invoice = await sendWithDiscount();
+    paypal.store.get(invoice.paypalInvoiceId)!.status = "PAID";
+    paypal.store.get(invoice.paypalInvoiceId)!.paid = 2450;
+    db.update(projects).set({ demoToday: "2026-12-30" }).where(eq(projects.id, projectId)).run();
+    assert.equal(await expireDiscounts(db, projectId, paypal.deps), 0);
+    assert.equal(paypal.calls.includes("update_invoicing"), false);
+    assert.equal(db.select().from(invoices).where(eq(invoices.id, invoice.id)).get()!.status, "paid");
   });
 });

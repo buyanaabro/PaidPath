@@ -16,6 +16,7 @@ const ACTOR_LABEL: Record<ActivityItem["actor"], string> = {
   copilot: "Copilot",
   automation: "PaidPath",
   user: "You",
+  client: "Client",
 };
 
 const time = (iso: string) =>

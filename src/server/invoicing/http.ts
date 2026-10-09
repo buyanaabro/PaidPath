@@ -5,7 +5,20 @@ import { defaultDeps, InvoicingError, listProjectInvoices, milestoneStatuses, ty
 export const requestActor = (req: Request) =>
   req.headers.get("x-paidpath-actor") === "copilot" ? ("copilot" as const) : ("user" as const);
 
-export const depsFor = (req: Request): InvoicingDeps => ({ ...defaultDeps, actor: requestActor(req) });
+/** Public origin for links we put into invoices (Render terminates TLS in front of us). */
+export function publicOrigin(req: Request) {
+  const configured = process.env.APP_URL ?? process.env.RENDER_EXTERNAL_URL;
+  if (configured) return configured.replace(/\/$/, "");
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const proto = req.headers.get("x-forwarded-proto") ?? new URL(req.url).protocol.replace(":", "");
+  return host ? `${proto}://${host}` : new URL(req.url).origin;
+}
+
+export const depsFor = (req: Request): InvoicingDeps => ({
+  ...defaultDeps,
+  actor: requestActor(req),
+  baseUrl: publicOrigin(req),
+});
 
 export const parseId = (value: string) => {
   const id = Number(value);

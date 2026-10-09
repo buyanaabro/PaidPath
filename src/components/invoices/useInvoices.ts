@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { DiscountOffer } from "@/lib/discount";
 import type { InvoiceView } from "@/server/invoicing/service";
 
 export type TaskInvoiceStatus = { taskId: number; invoiceStatus: string; percentDone: number };
@@ -81,8 +82,11 @@ export function useInvoices(projectId: number, initial: InvoicesSnapshot) {
     // Stable (state setter) so callers can use it in memoized callbacks.
     replaceSnapshot: setSnapshot as (next: InvoicesSnapshot) => void,
     refresh,
-    send: (taskId: number, name: string) =>
-      post("", `Invoicing “${name}” — AI is drafting the note, then PayPal creates and sends the invoice…`, { taskId }),
+    send: (taskId: number, name: string, discount: DiscountOffer | null = null) =>
+      post("", `Invoicing “${name}” — AI is drafting the note, then PayPal creates and sends the invoice…`, {
+        taskId,
+        discount,
+      }),
     remind: (invoiceId: number) => post(`/${invoiceId}/remind`, "Sending a PayPal payment reminder…"),
     recordPayment: (invoiceId: number) =>
       post(`/${invoiceId}/record-payment`, "Recording the payment on PayPal (sandbox demo)…"),

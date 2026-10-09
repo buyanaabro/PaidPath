@@ -6,7 +6,7 @@ import {
   type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 
-export const AGENT_ACTORS = ["architect", "copilot", "automation", "user"] as const;
+export const AGENT_ACTORS = ["architect", "copilot", "automation", "user", "client"] as const;
 export type AgentActor = (typeof AGENT_ACTORS)[number];
 
 const timestamps = {
@@ -35,6 +35,8 @@ export const projects = sqliteTable("projects", {
   paymentTermsDays: integer("payment_terms_days").notNull().default(14),
   // Per-project demo clock (YYYY-MM-DD); null means the real date.
   demoToday: text("demo_today"),
+  /** Capability token for the read-only client portal (`/p/<token>`); null until shared. */
+  shareToken: text("share_token").unique(),
   ...timestamps,
 });
 
@@ -114,6 +116,14 @@ export const invoices = sqliteTable("invoices", {
   paidAt: text("paid_at"),
   lastReminderAt: text("last_reminder_at"),
   reminderCount: integer("reminder_count").notNull().default(0),
+  // Early-payment discount (a PayPal line-item discount PaidPath removes when it expires).
+  discountPercent: real("discount_percent"),
+  discountDays: integer("discount_days"),
+  /** Last day (project clock, YYYY-MM-DD) the discount applies. */
+  discountUntil: text("discount_until"),
+  discountExpiredAt: text("discount_expired_at"),
+  /** What PayPal reports as paid (less than amountCents when the discount was taken). */
+  paidAmountCents: integer("paid_amount_cents"),
   ...timestamps,
 });
 

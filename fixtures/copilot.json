@@ -749,5 +749,167 @@
   },
   "modelVersion": "gemini-3.5-flash-lite",
   "responseId": "zRrJar7LGPLQvdIPmrq7kAU"
+ },
+ "03f64116f9b08662a5adad126b842e3a798efdaa": {
+  "candidates": [
+   {
+    "content": {
+     "parts": [
+      {
+       "functionCall": {
+        "name": "suggestEarlyPaymentDiscount",
+        "args": {
+         "milestone": "Designs signed off"
+        },
+        "id": "call_1135211"
+       },
+       "thoughtSignature": "EuICCt8CAWkUfRPPSlccTl4QbgcE1toOPuxbxyxFq8848CMdx77YcQISNwHnK1HR/2UwzfSM5eSS8xy6Nx4oySwwcAf5j61ccExAwNvZllZrQtYhPMsqNdrO6Gf2ORQZC5dZpDXz3ruEeoSeBFR73eImXIceDiWXqxXxLrbYbVUtpXAN8bziMvI7PuPMU/V/UcGmWPE6Eg068smC9kNAu/0a2kc8XOD9Kq+bzo7Mhb1hHfTJaMYNUpnRzfaqefjZ9KlPAbU71C/HXoC+/ZLqR8gYWc5GXkse3Cv3qcHDBFIRcRcJgUhoTHrBF0o1ECOVnGqt+B+HV34imygS3AB3pDbI9xRolWy+NWPxcLyhWODB3oXy/P+BkJdUqTINO0CqLTylT1CHlbT+/rBsswzZtU8xsHmIBqTVxdDh+mZbkc+wjILZCVSdSLbZ6YFdW04xTcMk462jLJq1u46st9xfXHvdNj1B"
+      }
+     ],
+     "role": "model"
+    },
+    "finishReason": "STOP",
+    "index": 0,
+    "finishMessage": "Model generated function call(s)."
+   }
+  ],
+  "usageMetadata": {
+   "promptTokenCount": 11460,
+   "candidatesTokenCount": 20,
+   "totalTokenCount": 11539,
+   "promptTokensDetails": [
+    {
+     "modality": "TEXT",
+     "tokenCount": 11460
+    }
+   ],
+   "thoughtsTokenCount": 59,
+   "serviceTier": "standard"
+  },
+  "modelVersion": "gemini-3.5-flash-lite",
+  "responseId": "qi7Jaq7GOeyCxN8PncfE0AU"
+ },
+ "3d33a4f603adb5d4f8bf85f6a59d9c3a60416a67": {
+  "candidates": [
+   {
+    "content": {
+     "parts": [
+      {
+       "text": "Yes! Offering a **$50** (2%) discount if paid within **7 days** would move the launch **7** days earlier (to December 4). Would you like me to send the invoice with this discount?",
+       "thoughtSignature": "EmAKXgFpFH0Tr5ccLp5y2pKuHIU+VHYGZJTkhpMPozKA9/AwXqOSLhwIb1rWfUtr+o7bZ/EKVLcCgEoQZR1m8x4os7WkklPKg6ibEHnaRcA94LWEsXs3hVztqPy6iUrjdxs="
+      }
+     ],
+     "role": "model"
+    },
+    "finishReason": "STOP",
+    "index": 0
+   }
+  ],
+  "usageMetadata": {
+   "promptTokenCount": 11682,
+   "candidatesTokenCount": 47,
+   "totalTokenCount": 11729,
+   "cachedContentTokenCount": 8057,
+   "promptTokensDetails": [
+    {
+     "modality": "TEXT",
+     "tokenCount": 11682
+    }
+   ],
+   "cacheTokensDetails": [
+    {
+     "modality": "TEXT",
+     "tokenCount": 8057
+    }
+   ],
+   "serviceTier": "standard"
+  },
+  "modelVersion": "gemini-3.5-flash-lite",
+  "responseId": "rC7Jat9igrC90g-H4diZBQ"
+ },
+ "fc9bc95f2b39f65e46bdd69f2d8024a7fde7a2b4": {
+  "candidates": [
+   {
+    "content": {
+     "parts": [
+      {
+       "functionCall": {
+        "name": "sendInvoice",
+        "args": {
+         "discountDays": 7,
+         "discountPercent": 2,
+         "milestone": "Designs signed off"
+        },
+        "id": "call_344525"
+       },
+       "thoughtSignature": "EooDCocDAWkUfROn/9kqXjcB07ly+qMNel63X91cOujNUIqjjCOJd/U+JT4vBnPU2Q1w4nAl2UDBk7nAisEZNVUAx/KlahMMvX+kkA88bunYs2g8HxN7iQdF/ffd2oKnq7cAfx1jUIJ751enL/ditABe5THEZ+eTfTuERgFbazTMLdM9iIkF53Ekvxcbyyi/ecTrBL3551YoQAtbWj3K9KHlXxeOt/a3aFGtzKoTZnx8ldyGXq6WE9Jf4fX4Fr2qgLk9fmXujU1A/i+LN7qPO+RN6VJxqnyQrKZezg8BGjTdUetdKbuyDrgpS5LpfRBnoaO+0cNQAGyfBzacE2FVTqdtnyD5fqv5I0/n6iUrsXwmMBKflHsbD5lobYk/ukdAnh7do/tvZrIZ3NGDuZ/VBVTn7/Cn2G4snZedEGqAtJOyjoehVD7FlVeaavomq5u9TaiqI71SN8V3wzdik9U58pik9Y3uJBHSIFahw+c4DHNVFly8A+z4uqutAi+QkGWk0kWCRohT11zEHzE7hQ=="
+      }
+     ],
+     "role": "model"
+    },
+    "finishReason": "STOP",
+    "index": 0,
+    "finishMessage": "Model generated function call(s)."
+   }
+  ],
+  "usageMetadata": {
+   "promptTokenCount": 11741,
+   "candidatesTokenCount": 28,
+   "totalTokenCount": 11853,
+   "cachedContentTokenCount": 8052,
+   "promptTokensDetails": [
+    {
+     "modality": "TEXT",
+     "tokenCount": 11741
+    }
+   ],
+   "cacheTokensDetails": [
+    {
+     "modality": "TEXT",
+     "tokenCount": 8052
+    }
+   ],
+   "thoughtsTokenCount": 84,
+   "serviceTier": "standard"
+  },
+  "modelVersion": "gemini-3.5-flash-lite",
+  "responseId": "uS7JaralCMvonsEPuJ2M0QM"
+ },
+ "bfc2e96b3c3c7b7d64869fa696aa3a64b229e081": {
+  "candidates": [
+   {
+    "content": {
+     "parts": [
+      {
+       "text": "Invoice #0032 for **$2,500** has been sent with a **2%** ($50) early-payment discount valid until November 23."
+      }
+     ],
+     "role": "model"
+    },
+    "finishReason": "STOP",
+    "index": 0
+   }
+  ],
+  "usageMetadata": {
+   "promptTokenCount": 12013,
+   "candidatesTokenCount": 39,
+   "totalTokenCount": 12052,
+   "cachedContentTokenCount": 8049,
+   "promptTokensDetails": [
+    {
+     "modality": "TEXT",
+     "tokenCount": 12013
+    }
+   ],
+   "cacheTokensDetails": [
+    {
+     "modality": "TEXT",
+     "tokenCount": 8049
+    }
+   ],
+   "serviceTier": "standard"
+  },
+  "modelVersion": "gemini-3.5-flash-lite",
+  "responseId": "yS7JasAb74TE3w-Uk8WwBg"
  }
 }

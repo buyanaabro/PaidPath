@@ -1,15 +1,15 @@
 import { connection, type NextRequest } from "next/server";
 import { getDb } from "@/db/client";
-import { modelChain } from "@/lib/ai";
+import { copilotModelChain } from "@/lib/ai";
 import { QuotaRouter, RateLimiter } from "@/server/copilot/limits";
 import { handlePrompt, type CopilotMode } from "@/server/copilot/proxy";
 import { FixtureStore } from "@/server/copilot/replay";
-import { parseId } from "@/server/invoicing/http";
+import { parseId, publicOrigin } from "@/server/invoicing/http";
 
 // Free-tier guards (in-memory; the hosted demo runs one instance).
 const [limit, windowSeconds] = (process.env.COPILOT_RATE_LIMIT ?? "10/600").split("/").map(Number);
 const limiter = new RateLimiter(limit || 10, (windowSeconds || 600) * 1000);
-const quota = new QuotaRouter(modelChain(), Number(process.env.COPILOT_MODEL_DAILY_CAP) || 16);
+const quota = new QuotaRouter(copilotModelChain(), Number(process.env.COPILOT_MODEL_DAILY_CAP) || 16);
 const fixtures = new FixtureStore(process.env.COPILOT_FIXTURES ?? "fixtures/copilot.json");
 const mode = (["record", "replay"].includes(process.env.COPILOT_MODE ?? "")
   ? process.env.COPILOT_MODE
@@ -28,13 +28,14 @@ export async function POST(req: NextRequest) {
       host: req.headers.get("x-forwarded-host") ?? req.headers.get("host"),
       secFetchSite: req.headers.get("sec-fetch-site"),
       rawBody: await req.text(),
+      baseUrl: publicOrigin(req),
     },
     {
       db: getDb(),
       fetch,
       now: () => new Date(),
       apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-      allowedModels: modelChain(),
+      allowedModels: copilotModelChain(),
       quota,
       limiter,
       mode,

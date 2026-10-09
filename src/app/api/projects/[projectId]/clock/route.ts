@@ -5,7 +5,8 @@ import { getDb } from "@/db/client";
 import { projects } from "@/db/schema";
 import { addDays, daysBetween, toIsoDate } from "@/lib/gates";
 import { isSimulated, projectToday } from "@/server/clock";
-import { fail, invoicesSnapshot, parseId, requestActor } from "@/server/invoicing/http";
+import { depsFor, fail, invoicesSnapshot, parseId, requestActor } from "@/server/invoicing/http";
+import { expireDiscounts } from "@/server/invoicing/service";
 import { getProject, logAgentRun } from "@/server/projects";
 
 // Per-project demo clock: { today: "YYYY-MM-DD" | null } or { shiftDays: n }.
@@ -45,6 +46,8 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/projects/[p
     ok: true,
   });
 
+  // Moving the clock past a discount deadline closes the offer on PayPal.
+  await expireDiscounts(db, projectId, depsFor(req));
   const updated = getProject(db, projectId)!;
   return Response.json({
     clock: { today: projectToday(updated), simulated: isSimulated(updated) },

@@ -1,13 +1,21 @@
 import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { invoices, tasks, type AgentActor, type Invoice } from "@/db/schema";
-import { formatMoney } from "@/lib/format";
+import {
+  DISCOUNT_NOTE_PREFIX,
+  discountAmountCents,
+  discountEndedLine,
+  discountNoteLine,
+  type DiscountOffer,
+} from "@/lib/discount";
+import { formatDate, formatMoney } from "@/lib/format";
 import { callPayPalTool, PayPalToolError } from "@/lib/paypal";
-import { daysBetween, toIsoDate } from "@/lib/gates";
+import { addDays, daysBetween, toIsoDate } from "@/lib/gates";
 import { projectNow, projectToday } from "@/server/clock";
+import { ensureShareToken, portalPath } from "@/server/portal";
 import { getProject, logAgentRun } from "@/server/projects";
 import { draftInvoiceNote, type DraftedNote, type NoteInput } from "./note";
-import { buildInvoicePayload, centsToValue, extractQrPng } from "./payload";
+import { buildInvoicePayload, centsToValue, composeNote, extractQrPng, withoutLine } from "./payload";
 import { reminderNote, reminderSubject } from "./reminder";
 import { blocksNewInvoice, isOpen, toAppStatus, toTaskInvoiceStatus } from "./status";
 
@@ -17,6 +25,8 @@ export type InvoicingDeps = {
   now: () => Date;
   /** Who asked for the action (activity feed attribution). Defaults to "user". */
   actor?: Extract<AgentActor, "user" | "copilot">;
+  /** Public origin (e.g. https://paidpath.onrender.com) for the client-portal link in notes. */
+  baseUrl?: string;
 };
 
 export const defaultDeps: InvoicingDeps = {
@@ -34,14 +44,20 @@ export class InvoicingError extends Error {
   }
 }
 
+type Money = { currency_code?: string; value?: string };
 type PayPalInvoice = {
   id: string;
   status: string;
   detail?: {
     invoice_number?: string;
+    invoice_date?: string;
     metadata?: { recipient_view_url?: string; invoicer_view_url?: string };
   };
+  due_amount?: Money;
+  payments?: { paid_amount?: Money };
 };
+
+const toCents = (money: Money | undefined) => (money?.value ? Math.round(Number(money.value) * 100) : null);
 
 const day = 24 * 60 * 60 * 1000;
 
@@ -72,6 +88,7 @@ function applyPayPalState(db: Db, invoiceId: number, paypal: PayPalInvoice, now:
       payUrl: paypal.detail?.metadata?.recipient_view_url ?? current.payUrl,
       invoicerUrl: paypal.detail?.metadata?.invoicer_view_url ?? current.invoicerUrl,
       paidAt: status === "paid" ? (current.paidAt ?? now.toISOString()) : current.paidAt,
+      paidAmountCents: toCents(paypal.payments?.paid_amount) ?? current.paidAmountCents,
     })
     .where(eq(invoices.id, invoiceId))
     .returning()
@@ -79,6 +96,27 @@ function applyPayPalState(db: Db, invoiceId: number, paypal: PayPalInvoice, now:
   mirrorToTask(db, updated);
   return { invoice: updated, changed: current.status !== status };
 }
+
+/** Phase name + deliverables of a milestone, used for the invoice line item and AI note. */
+function phaseOf(db: Db, task: { parentId: number | null } | undefined) {
+  const phase = task?.parentId ? db.select().from(tasks).where(eq(tasks.id, task.parentId)).get() : undefined;
+  const deliverables = phase
+    ? db
+        .select({ name: tasks.name, duration: tasks.duration })
+        .from(tasks)
+        .where(eq(tasks.parentId, phase.id))
+        .orderBy(asc(tasks.orderIndex))
+        .all()
+        .filter((t) => t.duration !== 0)
+        .map((t) => t.name)
+    : [];
+  return { phaseName: phase?.name, deliverables };
+}
+
+const portalLine = (db: Db, projectId: number, baseUrl: string | undefined) => {
+  const token = baseUrl ? ensureShareToken(db, projectId) : null;
+  return token ? `Follow your project's timeline: ${baseUrl}${portalPath(token)}` : null;
+};
 
 function getOwnedInvoice(db: Db, projectId: number, invoiceId: number) {
   const invoice = db
@@ -96,6 +134,7 @@ export async function invoiceMilestone(
   projectId: number,
   taskId: number,
   deps: InvoicingDeps = defaultDeps,
+  options: { discount?: DiscountOffer | null } = {},
 ) {
   const started = Date.now();
   const project = getProject(db, projectId);
@@ -113,6 +152,10 @@ export async function invoiceMilestone(
     throw new InvoicingError(400, "Only priced milestones can be invoiced.");
   }
 
+  if (options.discount && options.discount.days >= project.paymentTermsDays) {
+    throw new InvoicingError(400, `The discount window must end before the ${project.paymentTermsDays}-day due date.`);
+  }
+
   const existing = db
     .select()
     .from(invoices)
@@ -126,23 +169,14 @@ export async function invoiceMilestone(
 
   // Invoice dates follow the project clock (demo clock when simulated).
   const now = projectNow(project, deps.now());
+  const today = projectToday(project, deps.now());
+  const discount = options.discount ?? null;
   try {
     let invoice = existing;
     if (!invoice) {
-      const phase = task.parentId
-        ? db.select().from(tasks).where(eq(tasks.id, task.parentId)).get()
-        : undefined;
-      const deliverables = phase
-        ? db
-            .select({ name: tasks.name, duration: tasks.duration })
-            .from(tasks)
-            .where(eq(tasks.parentId, phase.id))
-            .orderBy(asc(tasks.orderIndex))
-            .all()
-            .filter((t) => t.duration !== 0)
-            .map((t) => t.name)
-        : [];
-      const phaseName = phase?.name ?? project.name;
+      const phase = phaseOf(db, task);
+      const deliverables = phase.deliverables;
+      const phaseName = phase.phaseName ?? project.name;
       const drafted = await deps.draftNote({
         projectName: project.name,
         clientName: project.clientName,
@@ -151,6 +185,16 @@ export async function invoiceMilestone(
         deliverables,
         amountLabel: formatMoney(task.amountCents, project.currency),
       });
+      const discountUntil = discount ? addDays(today, discount.days) : null;
+      const note = composeNote(drafted.note, [
+        portalLine(db, projectId, deps.baseUrl),
+        discount &&
+          discountNoteLine({
+            percent: discount.percent,
+            untilLabel: formatDate(discountUntil!),
+            savingsLabel: formatMoney(discountAmountCents(task.amountCents, discount.percent), project.currency),
+          }),
+      ]);
       const created = (await deps.callTool(
         "create_invoice",
         buildInvoicePayload({
@@ -163,9 +207,10 @@ export async function invoiceMilestone(
           phaseName,
           milestoneName: task.name,
           amountCents: task.amountCents,
-          note: drafted.note,
+          note,
           // PayPal needs a real date here; the project clock only drives our own dates.
           invoiceDate: deps.now().toISOString().slice(0, 10),
+          discountPercent: discount?.percent,
         }),
       )) as { href?: string; id?: string };
       const paypalInvoiceId = created.id ?? created.href?.split("/").pop();
@@ -183,8 +228,11 @@ export async function invoiceMilestone(
           currency: project.currency,
           paypalStatus: "DRAFT",
           status: "draft",
-          note: drafted.note,
+          note,
           noteSource: drafted.source,
+          discountPercent: discount?.percent ?? null,
+          discountDays: discount?.days ?? null,
+          discountUntil,
         })
         .returning()
         .get();
@@ -221,7 +269,12 @@ export async function invoiceMilestone(
       projectId,
       actor: deps.actor ?? "user",
       action: "invoice_milestone",
-      payload: { taskId, amountCents: task.amountCents, resumedDraft: Boolean(existing) },
+      payload: {
+        taskId,
+        amountCents: task.amountCents,
+        resumedDraft: Boolean(existing),
+        discount: sent.discountPercent ? { percent: sent.discountPercent, until: sent.discountUntil } : null,
+      },
       result: { paypalInvoiceId: sent.paypalInvoiceId, status: sent.paypalStatus, noteSource: sent.noteSource },
       durationMs: Date.now() - started,
       ok: true,
@@ -249,6 +302,7 @@ export async function refreshProjectInvoices(
 ) {
   const project = getProject(db, projectId);
   if (!project) return 0;
+  await expireDiscounts(db, projectId, deps);
   const open = db
     .select()
     .from(invoices)
@@ -280,6 +334,86 @@ export async function refreshProjectInvoices(
     }
   }
   return changed;
+}
+
+/**
+ * PaidPath enforces early-payment windows: once the project's today is past `discountUntil`
+ * and the invoice is unpaid, the line-item discount is removed on PayPal (the client is
+ * notified and now owes the full amount). PayPal's own conditional-rules API fails in sandbox.
+ */
+export async function expireDiscounts(db: Db, projectId: number, deps: InvoicingDeps = defaultDeps) {
+  const project = getProject(db, projectId);
+  if (!project) return 0;
+  const today = projectToday(project, deps.now());
+  const due = db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.projectId, projectId))
+    .all()
+    .filter((i) => i.status === "sent" && i.discountPercent && !i.discountExpiredAt && i.discountUntil && today > i.discountUntil);
+  let expired = 0;
+  for (const invoice of due) {
+    const started = Date.now();
+    try {
+      const paypal = (await deps.callTool("get_invoice", { invoice_id: invoice.paypalInvoiceId })) as PayPalInvoice;
+      if (toAppStatus(paypal.status) !== "sent") {
+        applyPayPalState(db, invoice.id, paypal, projectNow(project, deps.now()));
+        continue;
+      }
+      const task = invoice.taskId ? db.select().from(tasks).where(eq(tasks.id, invoice.taskId)).get() : undefined;
+      const note = composeNote(withoutLine(invoice.note ?? "", DISCOUNT_NOTE_PREFIX), [
+        discountEndedLine(formatDate(invoice.discountUntil!)),
+      ]);
+      await deps.callTool("update_invoicing", {
+        resource_type: "invoice",
+        invoice_update: {
+          ...buildInvoicePayload({
+            projectId,
+            projectName: project.name,
+            clientEmail: project.clientEmail,
+            clientName: project.clientName,
+            currency: invoice.currency,
+            taskId: invoice.taskId ?? 0,
+            phaseName: phaseOf(db, task).phaseName ?? project.name,
+            milestoneName: invoice.milestoneName,
+            amountCents: invoice.amountCents,
+            note,
+            invoiceDate: paypal.detail?.invoice_date ?? deps.now().toISOString().slice(0, 10),
+            discountPercent: null,
+          }),
+          invoice_id: invoice.paypalInvoiceId,
+          send_to_recipient: true,
+          send_to_invoicer: false,
+        },
+      });
+      db.update(invoices)
+        .set({ discountExpiredAt: projectNow(project, deps.now()).toISOString(), note })
+        .where(eq(invoices.id, invoice.id))
+        .run();
+      expired++;
+      logAgentRun(db, {
+        projectId,
+        actor: "automation",
+        action: "discount_expired",
+        payload: { invoiceId: invoice.id, until: invoice.discountUntil },
+        result: { amountCents: invoice.amountCents },
+        durationMs: Date.now() - started,
+        ok: true,
+      });
+    } catch (error) {
+      console.warn(`Expiring the discount on ${invoice.paypalInvoiceId} failed`, error);
+      logAgentRun(db, {
+        projectId,
+        actor: "automation",
+        action: "discount_expired",
+        payload: { invoiceId: invoice.id },
+        result: { error: String(error) },
+        durationMs: Date.now() - started,
+        ok: false,
+      });
+    }
+  }
+  return expired;
 }
 
 export async function remindInvoice(
@@ -342,12 +476,15 @@ export async function recordDemoPayment(
   const project = getProject(db, projectId)!;
   const now = projectNow(project, deps.now());
   try {
+    // Pay what PayPal currently asks for (less while an early-payment discount is active).
+    const before = (await deps.callTool("get_invoice", { invoice_id: invoice.paypalInvoiceId })) as PayPalInvoice;
+    const dueCents = toCents(before.due_amount) ?? invoice.amountCents;
     await deps.callTool("record_payment_for_invoice", {
       invoice_id: invoice.paypalInvoiceId,
       method: "BANK_TRANSFER",
       // PayPal rejects future payment dates, so report the real date to PayPal.
       payment_date: deps.now().toISOString().slice(0, 10),
-      amount: { currency_code: invoice.currency, value: centsToValue(invoice.amountCents) },
+      amount: { currency_code: invoice.currency, value: centsToValue(dueCents) },
       note: "Sandbox demo payment recorded in PaidPath",
     });
     const paypal = (await deps.callTool("get_invoice", {
@@ -359,7 +496,11 @@ export async function recordDemoPayment(
       actor: deps.actor ?? "user",
       action: "record_payment",
       payload: { invoiceId },
-      result: { status: updated.paypalStatus },
+      result: {
+        status: updated.paypalStatus,
+        paidCents: updated.paidAmountCents,
+        discountTaken: updated.paidAmountCents !== null && updated.paidAmountCents < updated.amountCents,
+      },
       durationMs: Date.now() - started,
       ok: true,
     });
