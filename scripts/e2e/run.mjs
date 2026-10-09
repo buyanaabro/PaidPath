@@ -70,6 +70,17 @@ const workspaceState = () => {
     pills: [...document.querySelectorAll(".pp-pill-discount, .pp-pill-paid")].map((p) => p.innerText),
   };
 };
+/** Waits until the page's Bryntum Gantt has loaded its tasks (hosted cold starts are slow). */
+const ganttReady = (page) =>
+  page.evaluate(async () =>
+    Boolean(
+      await __pp.waitFor(
+        () => typeof bryntum !== "undefined" && bryntum.queryAll("gantt").some((g) => !g.isDestroyed && g.taskStore.count > 0),
+        60000,
+        500,
+      ),
+    ),
+  );
 const finishOf = (kpi) => kpi?.match(/Projected finish (\w+ \d+, \d{4})/)?.[1] ?? null;
 const guideDone = (state, step) => state.guide.includes(`${step}:true`);
 const browserErrors = (page) => [
@@ -90,7 +101,9 @@ async function main() {
     }));
     check("landing page renders with the demo CTA", /reacts to money/i.test(landing.title ?? "") && landing.cta, landing.title);
     await page.evaluate(() => __pp.click(document.querySelector('form[action="/api/demo"] button')));
-    await new Promise((r) => setTimeout(r, 9000));
+    await new Promise((r) => setTimeout(r, 4000));
+    await ganttReady(page);
+    await new Promise((r) => setTimeout(r, 2000));
     const href = await page.evaluate(() => location.pathname);
     const projectId = Number(href.match(/\/projects\/(\d+)/)?.[1]);
     check("demo CTA opens a fresh project", Boolean(projectId), href);
@@ -140,7 +153,8 @@ async function main() {
     const snapshot = await client.get(`/api/portal/${token}`);
     check("portal snapshot hides owner-only data", snapshot.status === 200 && !/invoicerUrl|noteSource|clientEmail|sb-[a-z0-9]+@/.test(snapshot.text));
     check("portal has no write route", (await client.post(`/api/portal/${token}/gantt`)).status === 405);
-    await page.goto(`${BASE}${share.json.path}`, 6000);
+    await page.goto(`${BASE}${share.json.path}`, 2000);
+    await ganttReady(page);
     const portal = await page.evaluate(async () => {
       await __pp.waitFor(() => document.querySelector('[data-testid="portal-pay-today"]'), 20000);
       const g = bryntum.queryAll("gantt").filter((x) => !x.isDestroyed)[0];
@@ -167,7 +181,9 @@ async function main() {
     check("'pay today' prediction came true", Boolean(predicted) && portalAfter.launch.includes(predicted), `${predicted} → ${portalAfter.launch}`);
 
     // 4. Back in the workspace: plan pulled in, guide progress.
-    await page.goto(`${BASE}/projects/${projectId}`, 7000);
+    await page.goto(`${BASE}/projects/${projectId}`, 2000);
+    await ganttReady(page);
+    await new Promise((r) => setTimeout(r, 3000));
     const afterPay = await page.evaluate(workspaceState);
     check(
       "workspace finish moved earlier after payment",
@@ -182,7 +198,9 @@ async function main() {
     const clock = await client.post(`/api/projects/${projectId}/clock`, { shiftDays: 21 });
     const late = clock.json.invoices.find((i) => /Designs signed off/.test(i.milestoneName));
     check("clock past the due date makes it overdue and closes the discount", late?.overdue === true && Boolean(late?.discountExpiredAt), clock.json.clock?.today);
-    await page.goto(`${BASE}/projects/${projectId}`, 7000);
+    await page.goto(`${BASE}/projects/${projectId}`, 2000);
+    await ganttReady(page);
+    await new Promise((r) => setTimeout(r, 3000));
     const afterLate = await page.evaluate(workspaceState);
     check("guide ticks 'overdue'", guideDone(afterLate, "overdue"));
     const activity = (await client.get(`/api/projects/${projectId}/activity`)).json.items.map((i) => `${i.actor}:${i.action}`);
@@ -214,7 +232,9 @@ async function main() {
         }, 60000, 1500);
       });
       check("copilot answers a what-if (replay)", Boolean(answer), answer?.split("\n").pop()?.slice(0, 120) ?? "");
-      await page.goto(`${BASE}/projects/${projectId}`, 7000);
+      await page.goto(`${BASE}/projects/${projectId}`, 2000);
+      await ganttReady(page);
+      await new Promise((r) => setTimeout(r, 3000));
       check("guide ticks 'copilot'", guideDone(await page.evaluate(workspaceState), "copilot"));
     }
 

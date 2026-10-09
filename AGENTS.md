@@ -134,7 +134,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `{ projectId, url }`) creates a per-visitor copy (`projects.owner_token` = `pp_visitor` cookie,
   `is_demo`, demo clock `DEMO_STORY_TODAY` = 2026-11-07, the "Direction approved" date). Copies older
   than 24 h are deleted on each creation; `DEMO_RATE_LIMIT` (default 10/3600 per IP). `/projects`
-  lists own + owner-less projects. `SEED_DEMO_ON_START=false` on Render (no shared seeded project).
+  lists own + owner-less projects. production does not seed a shared project unless `SEED_DEMO_ON_START=true`.
   Visitor helpers: `src/server/visitor.ts` (`readVisitor` in Server Components, `ensureVisitor` in
   route handlers / server actions); demo logic `src/server/demo.ts`.
 - Demo checklist: `src/lib/demo-guide.ts` (pure steps from invoices + agent-log actions) rendered by

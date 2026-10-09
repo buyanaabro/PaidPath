@@ -30,11 +30,13 @@ export function seedDemoProject(db: Db, options: DemoSeedOptions = {}) {
 }
 
 /**
- * Seeds the shared demo project only when the database has no projects yet. The hosted demo
- * disables this (`SEED_DEMO_ON_START=false`): visitors get their own copies instead.
+ * Seeds the shared demo project only when the database has no projects yet — in development
+ * by default. In production visitors get their own demo copies instead (opt back in with
+ * `SEED_DEMO_ON_START=true`; `false` disables it in development).
  */
 export function seedIfEmpty(db: Db) {
-  if (process.env.SEED_DEMO_ON_START === "false") return;
+  const flag = process.env.SEED_DEMO_ON_START;
+  if (flag === "false" || (process.env.NODE_ENV === "production" && flag !== "true")) return;
   const existing = db.select({ id: projects.id }).from(projects).limit(1).get();
   if (!existing) seedDemoProject(db);
 }
