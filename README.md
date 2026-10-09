@@ -2,137 +2,171 @@
 
 **The project plan that reacts to money.**
 
-PaidPath is an AI project-to-cash workspace for freelancers and small agencies.
-An AI architect turns a client brief into a priced, milestone-based plan on a
-[Bryntum Gantt](https://bryntum.com/products/gantt/); each milestone is billed
-through **PayPal invoices** via the
-[PayPal Agent Toolkit](https://github.com/paypal/agent-toolkit). Unpaid invoices
-gate downstream work — the critical path and cashflow projection react live, and
-the plan recovers the moment a payment lands.
+PaidPath is an AI project-to-cash workspace for freelancers and small agencies. Describe a
+project and AI drafts a priced, milestone-by-milestone plan on a
+[Bryntum Gantt](https://bryntum.com/products/gantt/). Every milestone is a **PayPal invoice**
+sent through the [PayPal Agent Toolkit](https://github.com/paypal/agent-toolkit). When a client
+pays late, the next phase waits; when they pay early (or take your early-payment discount), the
+launch moves in — on your timeline and on the client's own portal.
+
+**Live demo:** https://paidpath.onrender.com → **Try the live demo** creates *your own* copy of a
+demo project (PayPal sandbox, no sign-up). · **Video:** _coming with the submission_
 
 > Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (2026).
-> Status: early development.
 
-## Quick start
+![PaidPath workspace: Gantt with payment holds, a discounted PayPal invoice and the invoice ledger](public/screens/workspace.png)
 
-Requirements: Node.js 22+, a free [PayPal Developer](https://developer.paypal.com/)
-sandbox app, and a free [Gemini API key](https://aistudio.google.com/).
+## Try it in 3 minutes
 
-PayPal sandbox setup: create a **US** sandbox business account, create a REST app owned
-by it, and enable the app's **Invoicing** and **Transaction search** features. Use the
-default sandbox *personal* account's email as `PAYPAL_SANDBOX_BUYER_EMAIL`.
+A checklist in the demo walks you through it; each step ticks off by itself.
+
+1. **Send the first invoice.** Click **Send invoice** on *Direction approved*. PaidPath simulates the
+   plan first — *"If the client pays within 7 days, the launch moves about 7 days earlier. Suggested:
+   2% ($30)."* — keep the discount and send. A real PayPal sandbox invoice goes out.
+2. **Open Client view** (header). This is what your client sees: their timeline, what's due with a
+   PayPal pay button, the discount, and *"Pay today → launch moves to Dec 11 (instead of Dec 25)"*.
+3. **Record the payment** in *PayPal invoices*. The Design phase pulls in; the launch moves 14 days
+   earlier (toast, header KPI, cash chart). The portal updates within seconds.
+4. **Let a payment run late.** Send the next invoice, then press **+1w** on the demo clock until it's
+   overdue — the plan slips a day per day and the expired discount is removed on PayPal.
+5. **Ask the copilot** (chat button, bottom right): *"What if Aurora pays a week late?"* or
+   *"Chase the overdue invoice."*
+
+The **Agent activity** tab shows every step with who did it: you, the copilot, the AI architect,
+PaidPath's automation, or the client.
+
+## Why it's different
+
+Plenty of tools generate a project plan, and plenty send invoices. PaidPath connects the two:
+**payment state is a scheduling input.** Each billable milestone holds back the work that depends
+on it until the client is expected to pay (milestone date + terms → the invoice's due date →
+"today" while overdue → the real payment date). Bryntum's scheduling engine reflows the plan,
+so cash timing and delivery timing are one picture — for you and for your client.
+
+## Feature tour
+
+| | |
+| --- | --- |
+| **AI Plan Architect** | `/projects/new`: brief + budget + start date → Gemini structured output → normalized server-side (acyclic, bounded durations, milestone prices that sum exactly to the budget) → editable *AI draft* you can regenerate with feedback or accept. |
+| **PayPal invoicing loop** | Send from the Invoice column or task menu: AI-written note (template fallback) → `create_invoice` → `send_invoice` → `get_invoice` → QR code. Milestones turn grey → blue → green; reminders escalate in tone; open invoices are polled, so a client paying on PayPal shows up live. |
+| **Payment-gated dependencies** | Holds are `startnoearlierthan` constraints PaidPath owns; early payment pulls the plan in, late payment pushes it out, with baseline, critical path, a cash chart and a per-project demo clock. |
+| **Early-payment discounts** | The send dialog simulates the plan on a headless copy and suggests an offer. The discount is a real line-item discount on the PayPal invoice; paying in the window settles at the discounted amount, and PaidPath removes the discount via `update_invoicing` when the window passes. |
+| ![](public/screens/send-dialog.png) | ![](public/screens/portal.png) |
+| **Client portal** | A secret, rotatable, read-only link (also in every invoice note): read-only Bryntum Gantt, what's due, PayPal pay buttons + QR, discounts, and a live "pay today → launch" simulation. No write routes; merchant links, notes and emails are never exposed. |
+| **Ops Copilot** | Bryntum's AI chat panel extended with PaidPath tools: what-if simulations, discount suggestions, PayPal transaction search, and confirmed actions (send/remind/record payment/move the clock); plan edits use Bryntum's inline approve + undo. |
+| ![](public/screens/pulled-in.png) | ![](public/screens/copilot.png) |
+
+## How the sponsor technologies are used
+
+### Bryntum
+| Feature | Where |
+| --- | --- |
+| Gantt + scheduling engine, constraints | Payment holds as `startnoearlierthan` constraints; the engine reflows dependents (`src/components/gantt/payment-gates.ts`) |
+| CrudManager | Load/sync the plan to SQLite with phantom-id mapping (`/api/projects/[id]/gantt`, `src/server/gantt/crud.ts`) |
+| Baselines, critical paths, indicators, time ranges, labels, task menu, task renderer, toolbar, Toast, MessageDialog | Plan vs baseline, "waiting for payment" / discount markers, demo-clock Today line, invoice actions, pull-in/slip toasts, copilot confirmations (`PlanGantt.tsx`) |
+| Headless `ProjectModel` | What-if and discount simulations on a copy of the plan (`src/components/gantt/simulate.ts`) |
+| AI feature (ChatPanel, `GooglePlugin`, `AIHelper` custom tools, inline approvals, undo) | Ops Copilot (`src/components/copilot/tools.ts`, proxy in `src/server/copilot/`) |
+| Grid | Invoice ledger and Agent activity feed |
+| Read-only Gantt | Client portal (`src/components/portal/PortalGantt.tsx`) |
+
+### PayPal (Agent Toolkit, sandbox)
+| Tool | Used for |
+| --- | --- |
+| `create_invoice`, `send_invoice`, `get_invoice`, `generate_invoice_qr_code` | Milestone invoices with pay link + QR |
+| `send_invoice_reminder` | Reminders (tone escalates; the copilot can write the note) |
+| `record_payment_for_invoice` | Sandbox "Record payment" (pays PayPal's current `due_amount`, discount-aware) |
+| `update_invoicing` | Removing an early-payment discount when its window passes |
+| `list_transactions` | Copilot answers about real PayPal account activity |
+| `list_invoices` | AI smoke test (Gemini tool-calling through the toolkit) |
+
+PayPal's dedicated early-payment-discount endpoint (`create_conditional_rules_for_invoice`) returned
+HTTP 500 in sandbox for every combination we tried, so PaidPath uses a line-item discount and
+enforces the window itself (`npm run smoke:discount` reproduces both behaviours).
+
+### AI (Google Gemini, free tier)
+| Use | Model / approach |
+| --- | --- |
+| Plan architect | Vercel AI SDK v6 `generateText` + `Output.object` (3.5 Flash → 3.8 Flash → Flash-Lite), template fallback |
+| Invoice notes | Short client-facing note per invoice, template fallback |
+| Ops Copilot | Bryntum AI → `/api/ai/prompt` proxy (key stays server-side) with a live project snapshot, so read questions take one request; Flash-Lite first (~1–4 s per request) |
+| Free-tier design | Quota-aware model routing, per-visitor rate limits, in-chat "out of quota" notices, deterministic simulations and suggestions (no AI calls) |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Browser
+    G[Bryntum Gantt<br/>workspace] -- CrudManager --> R1
+    C[Bryntum AI chat<br/>+ PaidPath tools] --> R2
+    P[Client portal<br/>read-only Gantt] --> R3
+  end
+  subgraph Next.js on Render
+    R1["/api/projects/:id/gantt"] --> DB[(SQLite<br/>Drizzle)]
+    R4["/api/projects/:id/invoices · clock · share"] --> S[Invoicing service]
+    R2["/api/ai/prompt<br/>quota + context"] --> GEM[Gemini API]
+    R3["/api/portal/:token"] --> DB
+    A[AI architect<br/>server action] --> GEM
+    S --> DB
+  end
+  S -- Agent Toolkit --> PP[PayPal sandbox<br/>Invoicing + Reporting]
+  C -. confirmed actions .-> R4
+  G -. invoice actions .-> R4
+```
+
+## Run locally
+
+Requirements: Node.js 22+, a free [PayPal Developer](https://developer.paypal.com/) sandbox app and a
+free [Gemini API key](https://aistudio.google.com/).
+
+PayPal sandbox setup: create a **US** sandbox business account, create a REST app owned by it and
+enable the app's **Invoicing** and **Transaction search** features. Use the default sandbox
+*personal* account's email as `PAYPAL_SANDBOX_BUYER_EMAIL`.
 
 ```bash
 npm install
-cp .env.example .env.local   # fill in PayPal sandbox + Gemini credentials
-npm run dev                  # http://localhost:3000
+cp .env.example .env.local   # PayPal sandbox + Gemini credentials
+npm run dev                  # http://localhost:3000 → "Try the live demo"
 ```
 
-The SQLite database (`data/paidpath.db`) is created, migrated and seeded with a demo
-project automatically on first start. Reset it with `npm run db:seed -- --reset`.
-
-The hosted demo shares one free Gemini quota across all visitors, so the copilot may be
-out of quota for the day. Running locally with your own free key takes a minute.
-
-## Scripts
+The SQLite database (`data/paidpath.db`) is created and migrated on first start. Locally a shared
+demo project is also seeded (`npm run db:seed -- --reset` resets everything).
 
 | Command | What it does |
 | --- | --- |
 | `npm run dev` / `build` / `start` | Next.js dev server / production build / production server |
 | `npm test` | Unit tests (Node test runner, in-memory SQLite) |
+| `npm run e2e -- [--base URL] [--copilot]` | Headless-browser smoke suite on a fresh demo copy (real PayPal sandbox; `--copilot` needs the server in `COPILOT_MODE=replay`) |
 | `npm run typecheck`, `npm run lint` | Type and lint checks |
-| `npm run db:seed [-- --reset]` | Seed the demo project (optionally wiping all data first) |
-| `npm run db:generate` | Generate a Drizzle migration after editing `src/db/schema.ts` |
-| `npm run smoke:paypal` | Creates a draft invoice in the PayPal sandbox via the Agent Toolkit |
-| `npm run smoke:ai` | Gemini calls a PayPal toolkit tool (`list_invoices`) |
-| `npm run smoke:invoice-flow` | Full sandbox invoice lifecycle: create → send → QR → reminder → record payment → PAID |
-| `npm run smoke:discount` | Early-payment discount in the sandbox: discounted invoice → paid in window; and expiry (discount removed via update) |
-| `npm run eval:architect` | Runs 3 sample briefs through the AI architect and checks plan invariants |
+| `npm run screens` | Regenerates the screenshots in `public/screens/` |
+| `npm run smoke:paypal` · `smoke:ai` · `smoke:invoice-flow` · `smoke:discount` | Real sandbox / Gemini checks |
+| `npm run eval:architect` | Three sample briefs through the AI architect, checking plan invariants |
+| `npm run db:seed [-- --reset]` · `db:generate` | Seed / generate a Drizzle migration |
 
-## Deploy (Render)
+**Deploy (Render):** `render.yaml` defines a free web service — **New → Blueprint**, connect the repo,
+fill in the four secrets. The hosted instance doesn't seed a shared project; every visitor gets
+their own demo copy.
 
-`render.yaml` defines a free Render web service. In the Render dashboard choose
-**New → Blueprint**, connect this repository and fill in the four secret environment
-variables. The free instance's disk is ephemeral, so the hosted demo data resets to
-the seeded demo whenever the instance restarts.
+## Limitations (honest notes)
 
-## How it works
-
-- **AI Plan Architect** — `/projects/new` takes a client brief, budget and start date.
-  Gemini returns a structured plan (`generateText` + `Output.object`), which is
-  normalized server-side (acyclic dependencies, bounded durations, milestone amounts
-  that sum exactly to the budget) and opened on the Gantt as an *AI draft*. You can
-  edit it, regenerate it with feedback ("shorter discovery, add training"), or accept it.
-  Every milestone except the last is a payment gate for the next phase.
-- **PayPal invoicing loop** — every priced milestone can be invoiced from the Gantt
-  (Invoice column button or the task context menu). PaidPath drafts a client note with
-  Gemini (template fallback), then uses the PayPal Agent Toolkit to `create_invoice`,
-  `send_invoice`, `get_invoice` and `generate_invoice_qr_code`. Milestone diamonds turn
-  grey → blue (awaiting payment) → green (paid). The invoice ledger (Bryntum Grid) under
-  the timeline offers the client pay page, the PayPal QR code, `send_invoice_reminder`,
-  and a sandbox-only "Record payment" (`record_payment_for_invoice`). Open invoices are
-  polled every 15s, so a client paying on PayPal shows up without a reload.
-- **Payment-gated dependencies** — every billable milestone (except the last) is a
-  payment gate: the next phase can't start before the client is expected to pay
-  (milestone date + payment terms → the invoice's due date → today while overdue → the
-  actual PayPal payment date). PaidPath writes these as `startnoearlierthan` constraints
-  and lets Bryntum's scheduling engine reflow the plan, so paying early pulls the launch
-  in and paying late pushes it out (with a Bryntum toast). Held tasks are hatched with a
-  lock and a "waiting for payment" indicator; overdue milestones turn red. A baseline is
-  captured when the plan is accepted, the header shows projected finish vs baseline, the
-  toolbar toggles critical path / baseline, and a cash chart compares baseline, projected
-  and received cash. A per-project **demo clock** (header) fast-forwards time.
-- **Early-payment discounts** — "Send invoice" opens a dialog that simulates the plan:
-  *"If the client pays within 7 days, the launch moves about 7 days earlier. Suggested: 2% ($50)."*
-  The discount is a real reduction on the PayPal invoice (line-item discount, with the terms in
-  the note); paying inside the window settles the invoice at the discounted amount, and when the
-  window passes unpaid PaidPath removes the discount with PayPal's `update_invoicing` (the client
-  is notified). PayPal's dedicated conditional-rules endpoint returned 500 in sandbox, so PaidPath
-  enforces the window itself. Payment gates stay conservative (the plan waits for the due date)
-  and pull in when the client actually pays early.
-- **Client portal** — "Client view" gives each project a secret, read-only link (`/p/<token>`,
-  rotatable) that is also added to every invoice note. The client sees a read-only Bryntum Gantt
-  with payment holds explained in plain language, what's due with PayPal pay buttons and QR codes,
-  active discounts, and *"Pay today → launch moves to Nov 27 (instead of Dec 11)"*, simulated on
-  a copy of their timeline. When a payment lands the portal reflows with "Thank you! Your launch
-  moved 14 days earlier", and the owner's Agent activity shows "Client opened the project portal"
-  (at most hourly). No write routes; the merchant link, notes and emails are never exposed.
-- **Ops Copilot** — the chat button on the Gantt opens **Bryntum's own AI chat panel**
-  (`features.ai` + `GooglePlugin`), extended with PaidPath tools. Every request goes
-  through `/api/ai/prompt`, which adds the Gemini key server-side and a live project
-  snapshot (money, invoices, payment gates, demo clock), so "what's outstanding / when do
-  I get paid?" is answered in a single model call. Custom tools:
-  `whatIfPaymentDelay` (re-runs the payment gates on a headless copy of the plan),
-  `getPayPalActivity` (PayPal Transaction Search), `suggestEarlyPaymentDiscount`, and the
-  write actions `sendInvoice` (optionally with an early-payment discount),
-  `sendReminder` (the copilot writes a reminder whose tone escalates with each one),
-  `recordPayment` and `moveDemoClock`. Each write action asks for confirmation in a
-  dialog first. Bryntum's built-in tools edit the plan with inline approve/reject and undo.
-  The **Agent activity** tab lists every AI architect, copilot, PayPal and clock action
-  with who did it.
-- **Free-tier friendly** — the proxy routes copilot requests across the Gemini models by
-  remaining daily quota (`gemini-3.5-flash-lite` first — about 1–4 s per request — then
-  `3.5-flash` → `3.8-flash`), only switches model between user turns (Gemini 3 thought signatures are model-specific), rate-limits
-  visitors, and answers in-chat ("out of free AI quota for today") instead of failing.
-  Everything else keeps working without AI (template plans and invoice notes).
-  `COPILOT_MODE=record|replay` saves and replays real Gemini responses
-  (`fixtures/copilot.json`) for repeatable browser tests without spending quota.
-- **Bryntum Gantt** loads and saves through Bryntum's CrudManager protocol
-  (`/api/projects/[id]/gantt`: `GET` load, `POST` sync) backed by SQLite (Drizzle ORM).
-  Edits auto-sync; client-side phantom ids are mapped to database ids server-side.
-- **PayPal Agent Toolkit** tools are exposed to the AI (Vercel AI SDK v6) and called
-  directly for deterministic flows.
+- **PayPal sandbox only.** "Record payment" simulates the client paying; real buyer checkout works
+  through the invoice pay page with a sandbox personal account.
+- **No sign-in.** Projects are scoped to the visitor's browser cookie in lists, but a project URL is
+  reachable by anyone who has it. Demo copies expire after 24 hours; Render restarts reset the
+  database.
+- **Gemini free tier.** The hosted demo shares a small daily quota. When it runs out, the copilot
+  says so in the chat and everything else keeps working (template plans and notes). Running
+  locally with your own free key avoids this.
+- **Bryntum trial.** The Gantt shows the trial watermark; Bryntum is installed from its public npm
+  trial package and isn't redistributed here.
+- **Demo clock.** Time-dependent behaviour (due dates, overdue, discount windows) follows a
+  per-project simulated date; dates sent to PayPal stay real.
 
 ## Stack
 
-- Next.js 16 (App Router, TypeScript), Tailwind CSS
-- Bryntum Gantt 7.3 (public npm trial package)
-- SQLite (better-sqlite3) + Drizzle ORM
-- PayPal Agent Toolkit + Vercel AI SDK v6 + Google Gemini (3.5 Flash → 3.8 Flash → 3.5 Flash-Lite)
-- Bryntum AI feature (chat panel + agent) for the Ops Copilot
-- Hosting: Render
+Next.js 16 (App Router, TypeScript) · Tailwind CSS · Bryntum Gantt 7.3 · SQLite (better-sqlite3) +
+Drizzle ORM · PayPal Agent Toolkit · Vercel AI SDK v6 · Google Gemini · Render
 
 ## License
 
-MIT for this repository's code. Bryntum Gantt is commercial software installed
-from Bryntum's public npm trial package and is not redistributed here.
+MIT for this repository's code. Bryntum Gantt is commercial software installed from Bryntum's public
+npm trial package and is not redistributed here.

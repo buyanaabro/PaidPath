@@ -31,6 +31,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[proj
         clientName: project.clientName,
         clientEmail: project.clientEmail,
         status: project.status,
+        isDemo: project.isDemo,
         total: formatMoney(Number(total?.cents ?? 0), project.currency),
         currency: project.currency,
         paymentTermsDays: project.paymentTermsDays,

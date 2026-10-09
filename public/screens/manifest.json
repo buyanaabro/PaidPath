@@ -1,0 +1,26 @@
+{
+  "plan": {
+    "width": 1800,
+    "height": 880
+  },
+  "send-dialog": {
+    "width": 1008,
+    "height": 1052
+  },
+  "workspace": {
+    "width": 2560,
+    "height": 1440
+  },
+  "portal": {
+    "width": 1640,
+    "height": 1120
+  },
+  "pulled-in": {
+    "width": 1520,
+    "height": 1500
+  },
+  "copilot": {
+    "width": 1520,
+    "height": 1040
+  }
+}

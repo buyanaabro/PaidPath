@@ -163,9 +163,13 @@ function createGanttProps(options: RefObject<Options>): BryntumGanttProps {
 
   return {
     viewPreset: "weekAndDayLetter",
-    barMargin: 8,
+    // Compact rows so the whole first phase fits on a laptop screen.
+    rowHeight: 38,
+    barMargin: 7,
     subGridConfigs: { locked: { width: 560 } },
-    tbar: [
+    tbar: {
+      cls: "pp-tbar",
+      items: [
       { type: "slidetoggle", text: "Critical path", checked: false, onChange: toggle("criticalPaths") },
       { type: "slidetoggle", text: "Baseline", checked: true, onChange: toggle("baselines") },
       "->",
@@ -177,7 +181,8 @@ function createGanttProps(options: RefObject<Options>): BryntumGanttProps {
           { icon: "fa fa-compress-arrows-alt", tooltip: "Fit plan", onAction: ({ source }: { source: { up: (t: string) => Gantt } }) => source.up("gantt").zoomToFit({ leftMargin: 40, rightMargin: 40 }) },
         ],
       },
-    ],
+      ],
+    },
     aiFeature: {
       promptUrl: `/api/ai/prompt?projectId=${options.current.projectId}`,
       apiPlugin: GooglePlugin,

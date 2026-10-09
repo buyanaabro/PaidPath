@@ -23,6 +23,7 @@ import type { ActivityItem } from "@/server/activity";
 import type { InvoiceView } from "@/server/invoicing/service";
 import ClientViewButton from "./ClientViewButton";
 import DemoClock, { type ClockState } from "./DemoClock";
+import DemoGuide from "./DemoGuide";
 import PlanDraftBanner from "./PlanDraftBanner";
 
 type Props = {
@@ -32,6 +33,7 @@ type Props = {
     clientName: string;
     clientEmail: string;
     status: "draft" | "active";
+    isDemo: boolean;
     total: string;
     currency: string;
     paymentTermsDays: number;
@@ -42,7 +44,9 @@ type Props = {
 };
 
 const LEDGER_MIN = 140;
-const LEDGER_DEFAULT = 270;
+// Until the user drags the splitter, the panel scales with the viewport so the Gantt keeps
+// most of the height on laptop screens.
+const LEDGER_DEFAULT = "clamp(150px, 24vh, 270px)";
 
 export default function ProjectWorkspace({ project, initialInvoices, initialClock, initialActivity }: Props) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ state: "idle" });
@@ -52,7 +56,7 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
   const [qrInvoice, setQrInvoice] = useState<InvoiceView | null>(null);
   const [sending, setSending] = useState<{ taskId: number; name: string; amountCents: number; isGate: boolean } | null>(null);
   const [ganttApi, setGanttApi] = useState<GanttApi | null>(null);
-  const [ledgerHeight, setLedgerHeight] = useState(LEDGER_DEFAULT);
+  const [ledgerHeight, setLedgerHeight] = useState<number | string>(LEDGER_DEFAULT);
   const [ledgerOpen, setLedgerOpen] = useState(true);
   const [tab, setTab] = useState<"invoices" | "activity">("invoices");
   const splitRef = useRef<HTMLElement>(null);
@@ -200,6 +204,9 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
           </span>
         </div>
       </div>
+      {project.isDemo && (
+        <DemoGuide invoices={invoices} actions={activity.items.map((item) => item.action)} />
+      )}
       {project.status === "draft" && (
         <PlanDraftBanner
           projectId={project.id}

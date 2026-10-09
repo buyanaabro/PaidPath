@@ -1,5 +1,12 @@
 import type { PlanTree } from "@/server/plan-tree";
 
+/**
+ * Demo copies start on the "Direction approved" milestone date (start Nov 2 + 2 + 3 working
+ * days), so the first invoice is due "today" and early payment visibly pulls the plan in.
+ * Asserted by the E2E suite.
+ */
+export const DEMO_STORY_TODAY = "2026-11-07";
+
 export const demoProject = {
   name: "Aurora Coffee — brand site",
   clientName: "Aurora Coffee",

@@ -199,3 +199,12 @@
   padding-block: 0.15em;
   font-size: 0.85em;
 }
+
+/* Compact Gantt toolbar so the timeline keeps the height on laptop screens. */
+.pp-tbar.b-toolbar {
+  min-height: 0;
+  padding-block: 0.2em;
+}
+.pp-tbar .b-toolbar-content {
+  padding-block: 0.2em;
+}

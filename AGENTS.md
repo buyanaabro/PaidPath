@@ -130,3 +130,23 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   lite); plan architect / invoice notes keep `modelChain()`.
 - Flex gotcha: in a column flex layout `flex-1` overrides an explicit `h-[..]` (basis 0) — the portal
   Gantt uses `flex-none` + height on mobile, `lg:flex-1` on desktop.
+- Demo copies (Phase 7): `POST /api/demo` (form → 303 to the workspace; `Accept: application/json` →
+  `{ projectId, url }`) creates a per-visitor copy (`projects.owner_token` = `pp_visitor` cookie,
+  `is_demo`, demo clock `DEMO_STORY_TODAY` = 2026-11-07, the "Direction approved" date). Copies older
+  than 24 h are deleted on each creation; `DEMO_RATE_LIMIT` (default 10/3600 per IP). `/projects`
+  lists own + owner-less projects. `SEED_DEMO_ON_START=false` on Render (no shared seeded project).
+  Visitor helpers: `src/server/visitor.ts` (`readVisitor` in Server Components, `ensureVisitor` in
+  route handlers / server actions); demo logic `src/server/demo.ts`.
+- Demo checklist: `src/lib/demo-guide.ts` (pure steps from invoices + agent-log actions) rendered by
+  `DemoGuide.tsx` on demo projects; hidden state in `localStorage` (`pp-demo-guide-hidden`) via
+  `useSyncExternalStore`.
+- E2E: `npm run e2e -- [--base URL] [--copilot]` (`scripts/e2e/run.mjs`, built on `scripts/dev/cdp.mjs`).
+  Creates its own demo copy; real PayPal sandbox calls; `--copilot` needs the server in
+  `COPILOT_MODE=replay` with fixtures for "What if Aurora pays a week late?" (recorded by
+  `npm run screens` with `COPILOT_MODE=record`). `cdp.mjs` gotchas: `evaluate` can't return DOM nodes
+  (serialize to booleans/strings); clicks via `__pp.click` scroll ancestors (reset `scrollTop` before
+  clipped screenshots).
+- Screenshots: `HIDE_DEV_INDICATOR=1 COPILOT_MODE=replay npm run dev` then `npm run screens` →
+  `public/screens/*.png` (2×, cropped) + `manifest.json` (sizes read by the landing page).
+- Next 16 `error.tsx` gets `retry()` (not `reset`); `next.config.ts` hides the dev badge only with
+  `HIDE_DEV_INDICATOR`.

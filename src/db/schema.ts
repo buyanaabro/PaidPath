@@ -37,6 +37,10 @@ export const projects = sqliteTable("projects", {
   demoToday: text("demo_today"),
   /** Capability token for the read-only client portal (`/p/<token>`); null until shared. */
   shareToken: text("share_token").unique(),
+  /** Visitor (cookie) who created the project; null = shared/seeded. Lists are scoped by it. */
+  ownerToken: text("owner_token"),
+  /** Per-visitor demo copy of the Aurora Coffee project (expires after 24 h). */
+  isDemo: integer("is_demo", { mode: "boolean" }).notNull().default(false),
   ...timestamps,
 });
 

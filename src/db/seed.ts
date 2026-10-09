@@ -3,7 +3,14 @@ import type { Db } from "./client";
 import { demoPlan, demoProject } from "./demo-project";
 import { projects } from "./schema";
 
-export function seedDemoProject(db: Db) {
+export type DemoSeedOptions = {
+  ownerToken?: string | null;
+  isDemo?: boolean;
+  /** Demo clock to start on (YYYY-MM-DD). */
+  demoToday?: string | null;
+};
+
+export function seedDemoProject(db: Db, options: DemoSeedOptions = {}) {
   return db.transaction((tx) => {
     const { id } = tx
       .insert(projects)
@@ -11,6 +18,9 @@ export function seedDemoProject(db: Db) {
         ...demoProject,
         clientEmail: process.env.PAYPAL_SANDBOX_BUYER_EMAIL || "client@example.com",
         status: "active",
+        ownerToken: options.ownerToken ?? null,
+        isDemo: options.isDemo ?? false,
+        demoToday: options.demoToday ?? null,
       })
       .returning({ id: projects.id })
       .get();
@@ -19,8 +29,12 @@ export function seedDemoProject(db: Db) {
   });
 }
 
-/** Seeds the demo project only when the database has no projects yet. */
+/**
+ * Seeds the shared demo project only when the database has no projects yet. The hosted demo
+ * disables this (`SEED_DEMO_ON_START=false`): visitors get their own copies instead.
+ */
 export function seedIfEmpty(db: Db) {
+  if (process.env.SEED_DEMO_ON_START === "false") return;
   const existing = db.select({ id: projects.id }).from(projects).limit(1).get();
   if (!existing) seedDemoProject(db);
 }

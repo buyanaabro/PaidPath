@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import AppHeader from "@/components/AppHeader";
+import DemoButton from "@/components/DemoButton";
 import { getDb } from "@/db/client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { listProjects } from "@/server/projects";
+import { readVisitor } from "@/server/visitor";
 
 export const metadata = { title: "Projects — PaidPath" };
 
 export default async function ProjectsPage() {
   await connection();
-  const projects = listProjects(getDb());
+  const projects = listProjects(getDb(), await readVisitor());
 
   return (
     <div className="min-h-screen bg-neutral-50">
@@ -34,8 +36,17 @@ export default async function ProjectsPage() {
           <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-10 text-center">
             <p className="font-medium">No projects yet</p>
             <p className="mt-1 text-sm text-neutral-600">
-              Paste a client brief and the AI architect drafts a priced plan for you.
+              Try the demo project, or paste a client brief and the AI architect drafts a priced plan for you.
             </p>
+            <div className="mt-5 flex justify-center gap-3">
+              <DemoButton />
+              <Link
+                href="/projects/new"
+                className="rounded-lg border border-neutral-300 bg-white px-5 py-2.5 text-sm font-semibold hover:bg-neutral-50"
+              >
+                Start from a brief
+              </Link>
+            </div>
           </div>
         ) : (
           <ul className="divide-y divide-neutral-200 overflow-hidden rounded-xl border border-neutral-200 bg-white">
@@ -55,6 +66,9 @@ export default async function ProjectsPage() {
                     <span className="text-sm font-medium tabular-nums">
                       {formatMoney(project.totalCents)}
                     </span>
+                    {project.isDemo && (
+                      <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-800">Demo</span>
+                    )}
                     <StatusBadge status={project.status} />
                   </div>
                 </Link>

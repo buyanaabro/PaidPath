@@ -13,6 +13,7 @@ import {
   logAgentRun,
   replaceProjectPlan,
 } from "@/server/projects";
+import { ensureVisitor } from "@/server/visitor";
 
 const BriefFormSchema = z.object({
   name: z.string().trim().max(80).optional(),
@@ -72,6 +73,7 @@ export async function createProjectFromBrief(
         startDate: input.startDate,
         paymentTermsDays: input.paymentTermsDays,
         briefText: input.brief,
+        ownerToken: await ensureVisitor(),
       },
       plan,
     );

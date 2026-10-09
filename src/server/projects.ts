@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { agentLog, projects, tasks, type AgentActor } from "@/db/schema";
 import { materializePlan } from "@/server/architect/materialize";
@@ -7,6 +7,7 @@ import { insertPlanTree } from "@/server/plan-tree";
 
 export type NewProjectInput = {
   name?: string;
+  ownerToken?: string | null;
   clientName: string;
   clientEmail: string;
   budgetCents: number;
@@ -73,7 +74,8 @@ export function currentPlanOutline(db: Db, projectId: number): NormalizedPlan | 
   };
 }
 
-export function listProjects(db: Db) {
+/** Projects the visitor created (cookie) plus shared ones without an owner. */
+export function listProjects(db: Db, ownerToken: string | null = null) {
   return db
     .select({
       id: projects.id,
@@ -82,10 +84,12 @@ export function listProjects(db: Db) {
       status: projects.status,
       startDate: projects.startDate,
       createdAt: projects.createdAt,
+      isDemo: projects.isDemo,
       totalCents: sql<number>`coalesce(sum(${tasks.amountCents}), 0)`,
     })
     .from(projects)
     .leftJoin(tasks, eq(tasks.projectId, projects.id))
+    .where(ownerToken ? or(isNull(projects.ownerToken), eq(projects.ownerToken, ownerToken)) : isNull(projects.ownerToken))
     .groupBy(projects.id)
     .orderBy(desc(projects.id))
     .all();
