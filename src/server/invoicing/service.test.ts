@@ -19,10 +19,12 @@ import {
 function fakePayPal() {
   const store = new Map<string, { status: string }>();
   const calls: string[] = [];
+  const lastArgs: Record<string, Record<string, unknown>> = {};
   let failNext: string | null = null;
   let counter = 0;
   const callTool: InvoicingDeps["callTool"] = async (name, args) => {
     calls.push(name);
+    lastArgs[name] = args;
     if (failNext === name) {
       failNext = null;
       throw new Error(`${name} exploded`);
@@ -60,6 +62,7 @@ function fakePayPal() {
   return {
     store,
     calls,
+    lastArgs,
     failOn: (name: string) => (failNext = name),
     deps: {
       callTool,
@@ -203,6 +206,22 @@ describe("payments and reminders", () => {
     assert.equal(reminded.reminderCount, 2);
     await recordDemoPayment(db, projectId, invoice.id, paypal.deps);
     await assert.rejects(remindInvoice(db, projectId, invoice.id, paypal.deps), (e: InvoicingError) => e.status === 409);
+  });
+
+  test("reminder tone escalates, a copilot note wins, and the actor is attributed", async () => {
+    const invoice = await invoiceMilestone(db, projectId, milestoneId, paypal.deps);
+    await remindInvoice(db, projectId, invoice.id, paypal.deps);
+    assert.match(String(paypal.lastArgs.send_invoice_reminder.subject), /^Reminder: Designs signed off/);
+    assert.match(String(paypal.lastArgs.send_invoice_reminder.note), /friendly reminder/);
+    await remindInvoice(db, projectId, invoice.id, paypal.deps);
+    assert.match(String(paypal.lastArgs.send_invoice_reminder.subject), /^Payment overdue:/);
+    await remindInvoice(db, projectId, invoice.id, { ...paypal.deps, actor: "copilot" }, { note: "  Hi Aurora — any update?  " });
+    assert.match(String(paypal.lastArgs.send_invoice_reminder.subject), /^Final notice:/);
+    assert.equal(paypal.lastArgs.send_invoice_reminder.note, "Hi Aurora — any update?");
+    const log = db.select().from(agentLog).all().at(-1)!;
+    assert.equal(log.actor, "copilot");
+    assert.equal(JSON.parse(log.payloadJson!).noteSource, "copilot");
+    assert.equal(db.select().from(agentLog).where(eq(agentLog.action, "invoice_milestone")).get()!.actor, "user");
   });
 
   test("invoices of another project are not reachable", async () => {

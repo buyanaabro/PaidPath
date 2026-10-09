@@ -7,10 +7,13 @@ import "@bryntum/gantt/svalbard-light.css";
 import "./paidpath-gantt.css";
 
 import {
+  GooglePlugin,
+  LocaleHelper,
   StringHelper,
   Toast,
   type DomClassList,
   type Gantt,
+  type Locale,
   type Model,
   type ProjectModel,
   type Store,
@@ -22,8 +25,11 @@ import {
   type BryntumGanttProps,
 } from "@bryntum/gantt-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import type { InvoiceAction, TaskInvoiceStatus } from "@/components/invoices/useInvoices";
+import { createCopilotTools } from "@/components/copilot/tools";
+import type { InvoiceAction, InvoicesSnapshot, TaskInvoiceStatus } from "@/components/invoices/useInvoices";
+import type { ClockState } from "@/components/workspace/DemoClock";
 import type { MilestoneCash } from "@/lib/cashflow";
+import { LAST_RESORT_MODEL } from "@/lib/models";
 import {
   addDays,
   expectedPayment,
@@ -43,6 +49,12 @@ import {
   type GateContext,
 } from "./payment-gates";
 import type { SaveStatus } from "./save-status";
+
+// The 7.3.7 trial bundle's built-in English locale lacks these AI chat strings
+// (the undo icon tooltip rendered as "L{ChatPanel.undoTooltip}"). Merged into "En".
+LocaleHelper.publishLocale("En", {
+  ChatPanel: { undoTooltip: "Undo data changes", redoTooltip: "Redo data changes" },
+} as unknown as Locale);
 
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -92,7 +104,13 @@ function milestoneCash(project: ProjectModel, gate: GateContext): MilestoneCash[
   });
 }
 
+type CopilotUpdate = (snapshot: InvoicesSnapshot, clock?: ClockState) => void;
+
 type Options = {
+  projectId: number;
+  client: { name: string; email: string };
+  getProject: () => ProjectModel | undefined;
+  onCopilotUpdate?: CopilotUpdate;
   canInvoice: boolean;
   onInvoiceAction?: (action: InvoiceAction, taskId: number, name: string) => void;
   gate: GateContext;
@@ -146,6 +164,51 @@ function createGanttProps(options: RefObject<Options>): BryntumGanttProps {
         ],
       },
     ],
+    aiFeature: {
+      promptUrl: `/api/ai/prompt?projectId=${options.current.projectId}`,
+      apiPlugin: GooglePlugin,
+      // The server picks the real model by free-tier quota; this one is always allowed.
+      model: LAST_RESORT_MODEL,
+      // Planning costs extra round-trips per question (free-tier budget).
+      planning: false,
+      mentions: false,
+      // A prompt includes the user's confirmation dialogs; the default 60s is too short.
+      timeout: 180_000,
+      requireConfirmationOnUpdates: true,
+      requireConfirmationOnRemovals: true,
+      requireConfirmationOnAdds: true,
+      debugMode: process.env.NODE_ENV !== "production",
+      chatButton: {
+        tooltip: "PaidPath Copilot",
+        chatPanel: {
+          title: "PaidPath Copilot",
+          width: "28em",
+          drawer: { autoClose: false },
+          intro: {
+            html: "<b>Ask about money and schedule</b> — I can see invoices, payment holds and the demo clock, run what-ifs, and send invoices or reminders after you confirm.",
+          },
+          examplePrompts: [
+            "When do I get paid, and what if Aurora pays a week late?",
+            "Chase the overdue invoice",
+            "Fast-forward two weeks — what's at risk?",
+            "Make High-fidelity mockups take 2 days longer",
+          ],
+        },
+      },
+      tools: createCopilotTools(() => {
+        const current = options.current;
+        return {
+          projectId: current.projectId,
+          canAct: current.canInvoice,
+          client: current.client,
+          termsDays: current.gate.termsDays,
+          project: current.getProject(),
+          gate: current.gate,
+          onSnapshot: (snapshot) => current.onCopilotUpdate?.(snapshot),
+          onClock: (clock, snapshot) => current.onCopilotUpdate?.(snapshot, clock),
+        };
+      }),
+    },
     criticalPathsFeature: { disabled: true },
     baselinesFeature: true,
     timeRangesFeature: { showCurrentTimeLine: false },
@@ -256,6 +319,25 @@ function createGanttProps(options: RefObject<Options>): BryntumGanttProps {
   };
 }
 
+/**
+ * Resolves once the AI feature's undo transaction (project STM) has closed, so server-owned
+ * state (invoice status, payment holds) is never recorded as an undoable AI change —
+ * "Undo" must not appear to un-send a PayPal invoice.
+ */
+function afterAiTransaction(project: ProjectModel) {
+  const stm = project.stm;
+  if (!stm?.isRecording) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(done, 120_000);
+    const detach = stm.on({ recordingStop: done }) as () => void;
+    function done() {
+      clearTimeout(timer);
+      detach();
+      resolve();
+    }
+  });
+}
+
 const TODAY_RANGE_ID = "pp-today";
 
 /** Local-only "Today" line at the project's (possibly simulated) date. */
@@ -284,6 +366,9 @@ type Props = {
   onSchedule?: (info: ScheduleInfo) => void;
   /** Scrolls to and selects this task when it changes. */
   focusTaskId?: { id: number } | null;
+  client: { name: string; email: string };
+  /** Copilot actions changed invoices (and maybe the clock). */
+  onCopilotUpdate?: CopilotUpdate;
 };
 
 export default function PlanGantt({
@@ -295,10 +380,17 @@ export default function PlanGantt({
   onInvoiceAction,
   gate,
   onSchedule,
+  client,
+  onCopilotUpdate,
 }: Props) {
   const project = useRef<BryntumGanttProjectModel>(null);
   const gantt = useRef<BryntumGantt>(null);
+  const getProject = () => project.current?.instance;
   const options = useRef<Options>({
+    projectId,
+    client,
+    getProject,
+    onCopilotUpdate,
     canInvoice,
     onInvoiceAction,
     gate: toGateContext(gate),
@@ -317,6 +409,7 @@ export default function PlanGantt({
     queue.current = queue.current.then(async () => {
       const instance = project.current?.instance;
       if (!instance || !loaded.current) return;
+      await afterAiTransaction(instance);
       const { taskStatuses, gate, canInvoice, onSchedule } = latest.current;
 
       for (const { taskId, invoiceStatus, percentDone } of taskStatuses) {
@@ -356,6 +449,10 @@ export default function PlanGantt({
   useEffect(() => {
     latest.current = { taskStatuses, gate, canInvoice, onSchedule };
     options.current = {
+      projectId,
+      client,
+      getProject: () => project.current?.instance,
+      onCopilotUpdate,
       canInvoice,
       onInvoiceAction,
       gate: toGateContext(gate),
@@ -364,7 +461,14 @@ export default function PlanGantt({
       ),
     };
     reconcile(true);
-  }, [taskStatuses, gate, canInvoice, onInvoiceAction, onSchedule]);
+    // The copilot acts on invoices and the clock, so it only exists for accepted plans.
+    const ai = gantt.current?.instance?.features.ai;
+    if (ai) {
+      ai.disabled = !canInvoice;
+      const button = (ai as unknown as { chatButton?: { hidden: boolean } }).chatButton;
+      if (button && typeof button === "object") button.hidden = !canInvoice;
+    }
+  }, [projectId, client, onCopilotUpdate, taskStatuses, gate, canInvoice, onInvoiceAction, onSchedule]);
 
   useEffect(() => {
     // The demo "Today" line is presentation only — never sync time ranges to the server.

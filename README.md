@@ -31,6 +31,9 @@ npm run dev                  # http://localhost:3000
 The SQLite database (`data/paidpath.db`) is created, migrated and seeded with a demo
 project automatically on first start. Reset it with `npm run db:seed -- --reset`.
 
+The hosted demo shares one free Gemini quota across all visitors, so the copilot may be
+out of quota for the day. Running locally with your own free key takes a minute.
+
 ## Scripts
 
 | Command | What it does |
@@ -78,6 +81,25 @@ the seeded demo whenever the instance restarts.
   captured when the plan is accepted, the header shows projected finish vs baseline, the
   toolbar toggles critical path / baseline, and a cash chart compares baseline, projected
   and received cash. A per-project **demo clock** (header) fast-forwards time.
+- **Ops Copilot** — the chat button on the Gantt opens **Bryntum's own AI chat panel**
+  (`features.ai` + `GooglePlugin`), extended with PaidPath tools. Every request goes
+  through `/api/ai/prompt`, which adds the Gemini key server-side and a live project
+  snapshot (money, invoices, payment gates, demo clock), so "what's outstanding / when do
+  I get paid?" is answered in a single model call. Custom tools:
+  `whatIfPaymentDelay` (re-runs the payment gates on a headless copy of the plan),
+  `getPayPalActivity` (PayPal Transaction Search), and the write actions `sendInvoice`,
+  `sendReminder` (the copilot writes a reminder whose tone escalates with each one),
+  `recordPayment` and `moveDemoClock`. Each write action asks for confirmation in a
+  dialog first. Bryntum's built-in tools edit the plan with inline approve/reject and undo.
+  The **Agent activity** tab lists every AI architect, copilot, PayPal and clock action
+  with who did it.
+- **Free-tier friendly** — the proxy routes requests across the Gemini models by
+  remaining daily quota (`gemini-3.5-flash` → `3.8-flash` → `3.5-flash-lite`), only switches
+  model between user turns (Gemini 3 thought signatures are model-specific), rate-limits
+  visitors, and answers in-chat ("out of free AI quota for today") instead of failing.
+  Everything else keeps working without AI (template plans and invoice notes).
+  `COPILOT_MODE=record|replay` saves and replays real Gemini responses
+  (`fixtures/copilot.json`) for repeatable browser tests without spending quota.
 - **Bryntum Gantt** loads and saves through Bryntum's CrudManager protocol
   (`/api/projects/[id]/gantt`: `GET` load, `POST` sync) backed by SQLite (Drizzle ORM).
   Edits auto-sync; client-side phantom ids are mapped to database ids server-side.
@@ -89,7 +111,8 @@ the seeded demo whenever the instance restarts.
 - Next.js 16 (App Router, TypeScript), Tailwind CSS
 - Bryntum Gantt 7.3 (public npm trial package)
 - SQLite (better-sqlite3) + Drizzle ORM
-- PayPal Agent Toolkit + Vercel AI SDK v6 + Google Gemini (3.5 Flash, falling back to 3.8 Flash)
+- PayPal Agent Toolkit + Vercel AI SDK v6 + Google Gemini (3.5 Flash → 3.8 Flash → 3.5 Flash-Lite)
+- Bryntum AI feature (chat panel + agent) for the Ops Copilot
 - Hosting: Render
 
 ## License

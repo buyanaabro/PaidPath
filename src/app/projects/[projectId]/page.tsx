@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import ProjectWorkspace from "@/components/workspace/ProjectWorkspace";
 import { getDb } from "@/db/client";
+import { listActivity } from "@/server/activity";
 import { tasks } from "@/db/schema";
 import { formatMoney } from "@/lib/format";
 import { isSimulated, projectToday } from "@/server/clock";
@@ -28,6 +29,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[proj
         id: project.id,
         name: project.name,
         clientName: project.clientName,
+        clientEmail: project.clientEmail,
         status: project.status,
         total: formatMoney(Number(total?.cents ?? 0), project.currency),
         currency: project.currency,
@@ -35,6 +37,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[proj
       }}
       initialClock={{ today: projectToday(project), simulated: isSimulated(project) }}
       initialInvoices={invoicesSnapshot(id)}
+      initialActivity={listActivity(db, id)}
     />
   );
 }

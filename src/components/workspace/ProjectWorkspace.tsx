@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import ActivityClient from "@/components/activity/ActivityClient";
+import { useActivity } from "@/components/activity/useActivity";
 import AppHeader from "@/components/AppHeader";
 import GanttClient from "@/components/gantt/GanttClient";
 import type { GateState, ScheduleInfo } from "@/components/gantt/PlanGantt";
@@ -15,6 +17,7 @@ import {
 } from "@/components/invoices/useInvoices";
 import { formatDate, formatMoney } from "@/lib/format";
 import { daysBetween } from "@/lib/gates";
+import type { ActivityItem } from "@/server/activity";
 import type { InvoiceView } from "@/server/invoicing/service";
 import DemoClock, { type ClockState } from "./DemoClock";
 import PlanDraftBanner from "./PlanDraftBanner";
@@ -24,6 +27,7 @@ type Props = {
     id: number;
     name: string;
     clientName: string;
+    clientEmail: string;
     status: "draft" | "active";
     total: string;
     currency: string;
@@ -31,12 +35,13 @@ type Props = {
   };
   initialInvoices: InvoicesSnapshot;
   initialClock: ClockState;
+  initialActivity: ActivityItem[];
 };
 
 const LEDGER_MIN = 140;
 const LEDGER_DEFAULT = 270;
 
-export default function ProjectWorkspace({ project, initialInvoices, initialClock }: Props) {
+export default function ProjectWorkspace({ project, initialInvoices, initialClock, initialActivity }: Props) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>({ state: "idle" });
   // Bumped after the AI replaces the plan, remounting the Gantt so it reloads.
   const [planVersion, setPlanVersion] = useState(0);
@@ -44,6 +49,7 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
   const [qrInvoice, setQrInvoice] = useState<InvoiceView | null>(null);
   const [ledgerHeight, setLedgerHeight] = useState(LEDGER_DEFAULT);
   const [ledgerOpen, setLedgerOpen] = useState(true);
+  const [tab, setTab] = useState<"invoices" | "activity">("invoices");
   const splitRef = useRef<HTMLElement>(null);
   const [clock, setClock] = useState(initialClock);
   const [schedule, setSchedule] = useState<ScheduleInfo>({
@@ -52,7 +58,19 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
     cash: [],
   });
   const invoicesApi = useInvoices(project.id, initialInvoices);
-  const { invoices, busy, error } = invoicesApi;
+  const { invoices, busy, error, replaceSnapshot } = invoicesApi;
+  const activity = useActivity(project.id, initialActivity, `${clock.today}|${invoices.map((i) => `${i.id}:${i.status}:${i.reminderCount}`).join(",")}`);
+  const client = useMemo(
+    () => ({ name: project.clientName, email: project.clientEmail }),
+    [project.clientName, project.clientEmail],
+  );
+  const onCopilotUpdate = useCallback(
+    (snapshot: InvoicesSnapshot, nextClock?: ClockState) => {
+      replaceSnapshot(snapshot);
+      if (nextClock) setClock(nextClock);
+    },
+    [replaceSnapshot],
+  );
 
   const gate = useMemo<GateState>(
     () => ({
@@ -186,6 +204,8 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
             gate={gate}
             onSchedule={setSchedule}
             focusTaskId={focusTask}
+            client={client}
+            onCopilotUpdate={onCopilotUpdate}
           />
         </div>
 
@@ -203,10 +223,39 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
                 type="button"
                 onClick={() => setLedgerOpen((open) => !open)}
                 aria-expanded={ledgerOpen}
+                aria-label={ledgerOpen ? "Collapse panel" : "Expand panel"}
                 className="text-sm font-semibold hover:text-neutral-600"
               >
-                {ledgerOpen ? "▾" : "▸"} PayPal invoices ({invoices.length})
+                {ledgerOpen ? "▾" : "▸"}
               </button>
+              <div role="tablist" aria-label="Bottom panel" className="flex gap-1">
+                {(
+                  [
+                    ["invoices", `PayPal invoices (${invoices.length})`],
+                    ["activity", "Agent activity"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === key}
+                    onClick={() => {
+                      setTab(key);
+                      setLedgerOpen(true);
+                      if (key === "activity") activity.markSeen();
+                    }}
+                    className={`relative rounded-md px-2 py-0.5 text-sm font-semibold ${
+                      tab === key ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"
+                    }`}
+                  >
+                    {label}
+                    {key === "activity" && activity.unread && tab !== "activity" && (
+                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-blue-600" aria-label="new activity" />
+                    )}
+                  </button>
+                ))}
+              </div>
               {busy && (
                 <span className="text-xs text-blue-800" aria-live="polite">
                   {busy}
@@ -229,7 +278,12 @@ export default function ProjectWorkspace({ project, initialInvoices, initialCloc
               Refresh from PayPal
             </button>
           </div>
-          {ledgerOpen && (
+          {ledgerOpen && tab === "activity" && (
+            <div className="pp-ledger" style={{ height: ledgerHeight }}>
+              <ActivityClient items={activity.items} />
+            </div>
+          )}
+          {ledgerOpen && tab === "invoices" && (
             <div className="flex" style={{ height: ledgerHeight }}>
               <div className="w-[380px] shrink-0 border-r border-neutral-200">
                 <CashChart milestones={schedule.cash} today={clock.today} />

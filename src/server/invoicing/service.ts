@@ -1,22 +1,25 @@
 import { and, asc, desc, eq, isNotNull } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { invoices, tasks, type Invoice } from "@/db/schema";
+import { invoices, tasks, type AgentActor, type Invoice } from "@/db/schema";
 import { formatMoney } from "@/lib/format";
 import { callPayPalTool, PayPalToolError } from "@/lib/paypal";
-import { toIsoDate } from "@/lib/gates";
+import { daysBetween, toIsoDate } from "@/lib/gates";
 import { projectNow, projectToday } from "@/server/clock";
 import { getProject, logAgentRun } from "@/server/projects";
 import { draftInvoiceNote, type DraftedNote, type NoteInput } from "./note";
 import { buildInvoicePayload, centsToValue, extractQrPng } from "./payload";
+import { reminderNote, reminderSubject } from "./reminder";
 import { blocksNewInvoice, isOpen, toAppStatus, toTaskInvoiceStatus } from "./status";
 
 export type InvoicingDeps = {
   callTool: (name: string, args: Record<string, unknown>) => Promise<unknown>;
   draftNote: (input: NoteInput) => Promise<DraftedNote>;
   now: () => Date;
+  /** Who asked for the action (activity feed attribution). Defaults to "user". */
+  actor?: Extract<AgentActor, "user" | "copilot">;
 };
 
-const defaultDeps: InvoicingDeps = {
+export const defaultDeps: InvoicingDeps = {
   callTool: callPayPalTool,
   draftNote: draftInvoiceNote,
   now: () => new Date(),
@@ -216,7 +219,7 @@ export async function invoiceMilestone(
 
     logAgentRun(db, {
       projectId,
-      actor: "automation",
+      actor: deps.actor ?? "user",
       action: "invoice_milestone",
       payload: { taskId, amountCents: task.amountCents, resumedDraft: Boolean(existing) },
       result: { paypalInvoiceId: sent.paypalInvoiceId, status: sent.paypalStatus, noteSource: sent.noteSource },
@@ -227,7 +230,7 @@ export async function invoiceMilestone(
   } catch (error) {
     logAgentRun(db, {
       projectId,
-      actor: "automation",
+      actor: deps.actor ?? "user",
       action: "invoice_milestone",
       payload: { taskId },
       result: { error: String(error) },
@@ -284,16 +287,26 @@ export async function remindInvoice(
   projectId: number,
   invoiceId: number,
   deps: InvoicingDeps = defaultDeps,
+  options: { note?: string | null } = {},
 ) {
   const started = Date.now();
   const invoice = getOwnedInvoice(db, projectId, invoiceId);
   if (!isOpen(invoice.status)) throw new InvoicingError(409, "Only unpaid invoices can be reminded.");
   const project = getProject(db, projectId)!;
+  const due = invoice.dueAt ? toIsoDate(invoice.dueAt) : null;
+  const reminder = {
+    reminderCount: invoice.reminderCount,
+    daysOverdue: due ? daysBetween(due, projectToday(project, deps.now())) : 0,
+    amount: formatMoney(invoice.amountCents, invoice.currency),
+    milestone: invoice.milestoneName.replace(/^Milestone:\s*/i, ""),
+    projectName: project.name,
+  };
+  const note = reminderNote(reminder, options.note);
   try {
     await deps.callTool("send_invoice_reminder", {
       invoice_id: invoice.paypalInvoiceId,
-      subject: `Reminder: ${invoice.milestoneName.replace(/^Milestone:\s*/i, "")} — ${project.name}`,
-      note: `A friendly reminder that this invoice for ${formatMoney(invoice.amountCents, invoice.currency)} is still open. You can pay securely via PayPal.`,
+      subject: reminderSubject(reminder),
+      note,
     });
   } catch (error) {
     friendly(error);
@@ -306,10 +319,10 @@ export async function remindInvoice(
     .get();
   logAgentRun(db, {
     projectId,
-    actor: "automation",
+    actor: deps.actor ?? "user",
     action: "send_reminder",
-    payload: { invoiceId },
-    result: { reminderCount: updated.reminderCount },
+    payload: { invoiceId, noteSource: options.note?.trim() ? "copilot" : "template" },
+    result: { reminderCount: updated.reminderCount, note },
     durationMs: Date.now() - started,
     ok: true,
   });
@@ -343,7 +356,7 @@ export async function recordDemoPayment(
     const { invoice: updated } = applyPayPalState(db, invoice.id, paypal, now);
     logAgentRun(db, {
       projectId,
-      actor: "automation",
+      actor: deps.actor ?? "user",
       action: "record_payment",
       payload: { invoiceId },
       result: { status: updated.paypalStatus },

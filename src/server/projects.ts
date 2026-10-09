@@ -1,6 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
-import { agentLog, projects, tasks } from "@/db/schema";
+import { agentLog, projects, tasks, type AgentActor } from "@/db/schema";
 import { materializePlan } from "@/server/architect/materialize";
 import type { NormalizedPlan } from "@/server/architect/schema";
 import { insertPlanTree } from "@/server/plan-tree";
@@ -95,7 +95,7 @@ export function logAgentRun(
   db: Db,
   entry: {
     projectId?: number | null;
-    actor: "architect" | "copilot" | "automation";
+    actor: AgentActor;
     action: string;
     payload?: unknown;
     result?: unknown;

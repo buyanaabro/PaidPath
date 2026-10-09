@@ -50,9 +50,19 @@ try {
       pending.delete(msg.id);
     } else if (msg.method === "Runtime.bindingCalled" && msg.params.name === "__cdpInput") {
       // Page scripts can request trusted mouse input: __cdpInput(JSON.stringify({ x, y, button }))
-      const { x, y, button = "left" } = JSON.parse(msg.params.payload);
-      for (const type of ["mousePressed", "mouseReleased"]) {
-        send("Input.dispatchMouseEvent", { type, x, y, button, clickCount: 1 });
+      // Also { text } (types into the focused element) and { key: "Enter" }.
+      // { move: true, x, y } hovers without clicking.
+      const { x, y, button = "left", text, key, move } = JSON.parse(msg.params.payload);
+      if (move) send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+      else if (text !== undefined) send("Input.insertText", { text });
+      else if (key) {
+        for (const type of ["keyDown", "keyUp"]) {
+          send("Input.dispatchKeyEvent", { type, key, code: key, windowsVirtualKeyCode: key === "Enter" ? 13 : 0, ...(key === "Enter" && type === "keyDown" ? { text: "\r" } : {}) });
+        }
+      } else {
+        for (const type of ["mousePressed", "mouseReleased"]) {
+          send("Input.dispatchMouseEvent", { type, x, y, button, clickCount: 1 });
+        }
       }
     } else if (msg.method === "Runtime.consoleAPICalled") {
       const text = msg.params.args.map((a) => a.value ?? a.description ?? "").join(" ");

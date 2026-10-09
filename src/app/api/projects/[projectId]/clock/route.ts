@@ -5,7 +5,7 @@ import { getDb } from "@/db/client";
 import { projects } from "@/db/schema";
 import { addDays, daysBetween, toIsoDate } from "@/lib/gates";
 import { isSimulated, projectToday } from "@/server/clock";
-import { fail, invoicesSnapshot, parseId } from "@/server/invoicing/http";
+import { fail, invoicesSnapshot, parseId, requestActor } from "@/server/invoicing/http";
 import { getProject, logAgentRun } from "@/server/projects";
 
 // Per-project demo clock: { today: "YYYY-MM-DD" | null } or { shiftDays: n }.
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, ctx: RouteContext<"/api/projects/[p
   db.update(projects).set({ demoToday }).where(eq(projects.id, projectId)).run();
   logAgentRun(db, {
     projectId,
-    actor: "automation",
+    actor: requestActor(req),
     action: "clock_changed",
     payload: { from: project.demoToday, to: demoToday },
     durationMs: 0,

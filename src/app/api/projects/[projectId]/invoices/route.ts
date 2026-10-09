@@ -1,6 +1,6 @@
 import { connection, type NextRequest } from "next/server";
 import { getDb } from "@/db/client";
-import { fail, handleInvoicing, invoicesSnapshot, parseId } from "@/server/invoicing/http";
+import { depsFor, fail, handleInvoicing, invoicesSnapshot, parseId } from "@/server/invoicing/http";
 import { invoiceMilestone, refreshProjectInvoices } from "@/server/invoicing/service";
 import { getProject } from "@/server/projects";
 
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, ctx: Context) {
   const taskId = parseId(String(body?.taskId ?? ""));
   if (!taskId) return fail(400, "taskId is required");
   return handleInvoicing(async () => {
-    const invoice = await invoiceMilestone(getDb(), projectId, taskId);
+    const invoice = await invoiceMilestone(getDb(), projectId, taskId, depsFor(req));
     return { invoice: { id: invoice.id, status: invoice.status }, ...invoicesSnapshot(projectId) };
   });
 }

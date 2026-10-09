@@ -6,6 +6,9 @@ import {
   type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 
+export const AGENT_ACTORS = ["architect", "copilot", "automation", "user"] as const;
+export type AgentActor = (typeof AGENT_ACTORS)[number];
+
 const timestamps = {
   createdAt: text("created_at")
     .notNull()
@@ -120,7 +123,8 @@ export const agentLog = sqliteTable("agent_log", {
   ts: text("ts")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
-  actor: text("actor", { enum: ["architect", "copilot", "automation"] }).notNull(),
+  // user = clicked in the UI, copilot = AI agent (after confirmation), automation = PaidPath itself.
+  actor: text("actor", { enum: AGENT_ACTORS }).notNull(),
   action: text("action").notNull(),
   payloadJson: text("payload_json"),
   resultJson: text("result_json"),

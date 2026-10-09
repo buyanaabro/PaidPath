@@ -78,7 +78,8 @@ export function useInvoices(projectId: number, initial: InvoicesSnapshot) {
     busy,
     error,
     clearError: () => setError(null),
-    replaceSnapshot: (next: InvoicesSnapshot) => setSnapshot(next),
+    // Stable (state setter) so callers can use it in memoized callbacks.
+    replaceSnapshot: setSnapshot as (next: InvoicesSnapshot) => void,
     refresh,
     send: (taskId: number, name: string) =>
       post("", `Invoicing “${name}” — AI is drafting the note, then PayPal creates and sends the invoice…`, { taskId }),

@@ -59,6 +59,30 @@
   color: #5b21b6;
 }
 
+/* Activity feed actors */
+.pp-actor-copilot {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+.pp-actor-architect {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+.pp-actor-automation {
+  background: #f5f5f5;
+  color: #525252;
+}
+.pp-actor-user {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Copilot confirmation dialog */
+.pp-confirm-line {
+  margin: 0 0 0.5em;
+  max-width: 34em;
+}
+
 .pp-action {
   margin-inline-start: auto;
   border: 1px solid #d4d4d4;

@@ -81,3 +81,30 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   could not get the Invoicing scope. Check scopes: request a client_credentials token and look for
   `services/invoicing` and `services/reporting` in `scope`.
 - `zod@3` (toolkit schemas are zod v3). New deps: pick versions published ≥7 days ago.
+- Ops Copilot = Bryntum `features.ai` (experimental in 7.3) + `GooglePlugin`, configured in `PlanGantt.tsx`
+  (`aiFeature`), custom tools in `src/components/copilot/tools.ts` (`AIHelper.createBasicTool`, write
+  tools confirm with `MessageDialog.confirm` and send `x-paidpath-actor: copilot`). Server half:
+  `POST /api/ai/prompt?projectId=` → `src/server/copilot/proxy.ts` (same-origin, model allowlist, strips
+  Bryntum's `model` field, appends `buildCopilotContext()` to `systemInstruction`, forces thinking low,
+  `QuotaRouter` per model/day + `RateLimiter` per IP). User-facing failures are returned as a normal
+  model text reply (`notice()`) — GooglePlugin throws on non-OK and only shows "(failed)".
+- Bryntum AI gotchas (7.3.7): `tools: { name: null }` (documented removal) crashes `toolsDescription`;
+  `planning: true` costs ~3 extra requests per multi-part question (disabled); default prompt `timeout`
+  60s includes time spent in our confirm dialogs (set 180s); `mentions: false` swaps the input to a
+  `<textarea>` (with mentions it's a contenteditable); built-in updates confirm **inline**
+  (`.b-approve-button` / `.b-reject-button`), our dialogs are `.b-message-dialog`; undo = `.b-icon-undo`
+  bubble tool; English locale lacks `ChatPanel.undoTooltip` (patched via `LocaleHelper.publishLocale`).
+  Tool names come from the task model `$name` ("Task" → `getTasks`, `updateTasks`).
+- Server-owned state applied during an AI turn would be recorded in the AI's undo transaction
+  (project STM) — `reconcile` waits for `afterAiTransaction()` so "Undo" never appears to un-send an
+  invoice.
+- Gemini 3 only validates thought signatures within the current turn: the proxy may switch model when
+  the last message is new user text (it strips old `thoughtSignature`s), never mid tool-loop.
+- Copilot E2E without quota: run dev with `COPILOT_MODE=record` once (real Gemini, saves
+  `fixtures/copilot.json`), then `COPILOT_MODE=replay` (keys = user text + call names/args, so replays
+  of id-specific args like invoice numbers depend on data). Chat driver pattern: open `.b-chat-button`,
+  focus `chatPanel.widgetMap.messageField` textarea, `__cdpInput({ text })` + `{ key: "Enter" }`.
+  `__cdpInput({ move: true, x, y })` hovers (tooltips).
+- PayPal `get_merchant_insights` throws in sandbox; `list_transactions` works (31-day max range).
+- Agent log actors: `architect`, `copilot`, `automation` (PayPal polling), `user` (UI clicks). The
+  Agent activity tab reads `/api/projects/[id]/activity` (`src/server/activity.ts` summaries).

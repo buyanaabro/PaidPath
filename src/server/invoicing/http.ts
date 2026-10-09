@@ -1,5 +1,11 @@
 import { getDb } from "@/db/client";
-import { InvoicingError, listProjectInvoices, milestoneStatuses } from "./service";
+import { defaultDeps, InvoicingError, listProjectInvoices, milestoneStatuses, type InvoicingDeps } from "./service";
+
+/** Activity-feed attribution: the copilot tags its requests; anything else is the user. */
+export const requestActor = (req: Request) =>
+  req.headers.get("x-paidpath-actor") === "copilot" ? ("copilot" as const) : ("user" as const);
+
+export const depsFor = (req: Request): InvoicingDeps => ({ ...defaultDeps, actor: requestActor(req) });
 
 export const parseId = (value: string) => {
   const id = Number(value);
