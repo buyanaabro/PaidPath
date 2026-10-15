@@ -17,7 +17,8 @@
     "smoke:invoice-flow": "tsx scripts/smoke-invoice-flow.ts",
     "smoke:discount": "tsx scripts/smoke-discount.ts",
     "e2e": "node scripts/e2e/run.mjs",
-    "screens": "node scripts/dev/capture-screens.mjs"
+    "screens": "node scripts/dev/capture-screens.mjs",
+    "video": "node scripts/dev/record-demo.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "3.0.130",

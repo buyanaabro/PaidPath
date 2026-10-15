@@ -131,6 +131,14 @@ export async function launch({ windowSize = process.env.WINDOW_SIZE ?? "1440,900
     logs,
     exceptions,
     send,
+    /** Subscribe to a CDP event (`Page.screencastFrame`, …). Returns an unsubscribe fn. */
+    on(method, fn) {
+      const listener = (msg) => {
+        if (msg.method === method) fn(msg.params);
+      };
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
     /** Navigates and waits for the load event, then `settleMs`. */
     async goto(url, settleMs = 1500) {
       const loaded = new Promise((resolve) => {

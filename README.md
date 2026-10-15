@@ -10,7 +10,8 @@ pays late, the next phase waits; when they pay early (or take your early-payment
 launch moves in — on your timeline and on the client's own portal.
 
 **Live demo:** https://paidpath.onrender.com → **Try the live demo** creates *your own* copy of a
-demo project (PayPal sandbox, no sign-up). · **Video:** _coming with the submission_
+demo project (PayPal sandbox, no sign-up). · **Video:** [1-minute demo](/demo/paidpath-demo.mp4)
+(`npm run video` regenerates it; upload that file to YouTube as **Public** for Devpost).
 
 > Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (2026).
 
