@@ -1,5 +1,20 @@
 # Devpost submission copy (PaidPath)
 
+## Do this now (needs your login, ~5 minutes)
+
+1. YouTube: upload `~/Desktop/paidpath-demo.mp4` (same file as
+   `public/demo/paidpath-demo.mp4`) at https://www.youtube.com/upload —
+   title `PaidPath — the project plan that reacts to money`, visibility
+   **Public**, no music. Paste the watch URL into the Video section below
+   and into README.
+2. Devpost: log in at https://devpost.com/users/login (GitHub is fine) →
+   [Join the hackathon](https://paypalaihackathon.devpost.com/) →
+   **Enter a Submission** / **Start project**. Paste every field below.
+   Gallery images are `public/screens/*.png`. Tick Bryntum and Render.
+
+The Cursor browser cannot complete GitHub/Google login (no passkeys).
+Brave is already open on the YouTube upload page.
+
 Paste these fields into
 [Enter a Submission](https://paypalaihackathon.devpost.com/).
 Tick **Bryntum** and **Render** if the form has sponsor-prize checkboxes.
