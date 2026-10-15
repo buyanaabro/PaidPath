@@ -13,7 +13,7 @@ export function LogoMark({ className = "h-6 w-6" }: { className?: string }) {
 
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
-    <span className={`inline-flex items-center gap-2 font-semibold tracking-tight ${className}`}>
+    <span className={`inline-flex items-center gap-2 font-semibold tracking-[-0.01em] ${className}`}>
       <LogoMark />
       PaidPath
     </span>

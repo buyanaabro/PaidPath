@@ -22,7 +22,7 @@ export default function CashChart({ milestones, today }: Props) {
   const total = milestones.reduce((sum, m) => sum + m.amountCents, 0);
   if (!total || !series.projected.length) {
     return (
-      <div className="flex h-full items-center justify-center px-4 text-xs text-neutral-500">
+      <div className="flex h-full items-center justify-center px-4 text-xs text-ink-muted">
         Cash projection appears once the plan has priced milestones.
       </div>
     );
@@ -49,8 +49,8 @@ export default function CashChart({ milestones, today }: Props) {
 
   return (
     <figure className="flex h-full flex-col px-3 py-2" aria-label="Cash projection chart">
-      <figcaption className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-600">
-        <span className="font-semibold text-neutral-900">Cash in</span>
+      <figcaption className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
+        <span className="font-semibold text-ink">Cash in</span>
         <span className="inline-flex items-center gap-1">
           <span className="h-0.5 w-3 bg-green-600" /> Received {money(received)}
         </span>
@@ -67,22 +67,22 @@ export default function CashChart({ milestones, today }: Props) {
         {[0, 0.5, 1].map((f) => (
           <g key={f}>
             <line x1={PAD.left} x2={W - PAD.right} y1={y(total * f)} y2={y(total * f)} stroke="#f0f0f0" />
-            <text x={W - PAD.right + 4} y={y(total * f) + 3} fontSize="9" fill="#737373">
+            <text x={W - PAD.right + 4} y={y(total * f) + 3} fontSize="12" fill="#3f4b5c">
               {money(total * f)}
             </text>
           </g>
         ))}
         <line x1={x(today)} x2={x(today)} y1={PAD.top - 6} y2={H - PAD.bottom} stroke="#d97706" strokeWidth="1.5" />
-        <text x={x(today)} y={PAD.top - 9} fontSize="9" fill="#b45309" textAnchor="middle">
+        <text x={x(today)} y={PAD.top - 9} fontSize="12" fill="#b45309" textAnchor="middle">
           today
         </text>
         <path d={step(series.planned, range.to)} fill="none" stroke="#a3a3a3" strokeWidth="1.5" strokeDasharray="4 3" />
         <path d={step(series.projected, range.to)} fill="none" stroke="#2563eb" strokeWidth="2" />
         <path d={step(series.received, today)} fill="none" stroke="#16a34a" strokeWidth="3" />
-        <text x={PAD.left} y={H - 5} fontSize="9" fill="#737373">
+        <text x={PAD.left} y={H - 5} fontSize="12" fill="#3f4b5c">
           {short(range.from)}
         </text>
-        <text x={W - PAD.right} y={H - 5} fontSize="9" fill="#737373" textAnchor="end">
+        <text x={W - PAD.right} y={H - 5} fontSize="12" fill="#3f4b5c" textAnchor="end">
           {short(range.to)}
         </text>
       </svg>

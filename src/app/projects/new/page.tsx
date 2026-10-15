@@ -13,11 +13,11 @@ function nextMonday(from = new Date()) {
 export default async function NewProjectPage() {
   await connection();
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-screen bg-paper text-ink">
       <AppHeader />
       <main className="mx-auto max-w-2xl px-6 py-10">
-        <h1 className="text-2xl font-semibold tracking-tight">New project</h1>
-        <p className="mb-8 text-sm text-neutral-600">
+        <h1 className="text-2xl text-title">New project</h1>
+        <p className="mb-8 text-sm text-ink-muted">
           Describe the work. The AI architect drafts phases, tasks and billable milestones that add
           up to your budget — you review it on the timeline before anything is invoiced.
         </p>

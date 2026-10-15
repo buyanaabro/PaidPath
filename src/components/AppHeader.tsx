@@ -9,11 +9,11 @@ export default function AppHeader({ children }: { children?: ReactNode }) {
         <Link href="/" aria-label="PaidPath home" className="text-sm">
           <Wordmark />
         </Link>
-        <nav aria-label="Main" className="flex items-center gap-4 text-sm text-neutral-600">
-          <Link href="/projects" className="hover:text-neutral-900">
+        <nav aria-label="Main" className="flex items-center gap-4 text-sm text-ink-muted">
+          <Link href="/projects" className="hover:text-ink">
             Projects
           </Link>
-          <Link href="/projects/new" className="hover:text-neutral-900">
+          <Link href="/projects/new" className="hover:text-ink">
             New project
           </Link>
         </nav>

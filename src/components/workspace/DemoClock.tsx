@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Button from "@/components/ui/Button";
 import type { InvoicesSnapshot } from "@/components/invoices/useInvoices";
 import { formatDate } from "@/lib/format";
 
@@ -36,28 +37,51 @@ export default function DemoClock({ projectId, clock, onChange }: Props) {
     }
   };
 
-  const button =
-    "rounded-md border border-neutral-300 bg-white px-2 py-0.5 text-xs font-medium hover:bg-neutral-100 disabled:opacity-50";
-
   return (
     <div className="flex items-center gap-2 text-xs" aria-label="Demo clock">
-      <span className={clock.simulated ? "rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-900" : "text-neutral-600"}>
+      <span
+        className={
+          clock.simulated
+            ? "rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-900"
+            : "text-ink-muted"
+        }
+      >
         {clock.simulated ? "Demo clock" : "Today"}{" "}
         <span className="tabular-nums">{formatDate(clock.today)}</span>
       </span>
-      <button type="button" className={button} disabled={busy} onClick={() => move({ shiftDays: -1 })}>
+      <Button
+        variant="secondary"
+        size="sm"
+        disabled={busy}
+        onClick={() => move({ shiftDays: -1 })}
+      >
         −1d
-      </button>
-      <button type="button" className={button} disabled={busy} onClick={() => move({ shiftDays: 1 })}>
+      </Button>
+      <Button
+        variant="secondary"
+        size="sm"
+        disabled={busy}
+        onClick={() => move({ shiftDays: 1 })}
+      >
         +1d
-      </button>
-      <button type="button" className={button} disabled={busy} onClick={() => move({ shiftDays: 7 })}>
+      </Button>
+      <Button
+        variant="secondary"
+        size="sm"
+        disabled={busy}
+        onClick={() => move({ shiftDays: 7 })}
+      >
         +1w
-      </button>
+      </Button>
       {clock.simulated && (
-        <button type="button" className={button} disabled={busy} onClick={() => move({ today: null })}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={busy}
+          onClick={() => move({ today: null })}
+        >
           Real date
-        </button>
+        </Button>
       )}
       {error && (
         <span role="alert" className="text-red-700">

@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GateContext } from "@/components/gantt/payment-gates";
+import Button, { buttonClass } from "@/components/ui/Button";
+import { flashClass, useFlashOnChange } from "@/hooks/useFlashOnChange";
 import { formatDate, formatMoney } from "@/lib/format";
 import { daysBetween, toIsoDate, type IsoDate } from "@/lib/gates";
 import type { PortalInvoice, PortalSnapshot } from "@/server/portal-snapshot";
@@ -83,19 +85,22 @@ export default function PortalView({ token, initial }: { token: string; initial:
 
   const onReady = useCallback((next: PortalGanttApi) => setApi(next), []);
   const ahead = schedule.finish && schedule.baselineFinish ? daysBetween(schedule.finish, schedule.baselineFinish) : null;
+  const launchFlash = useFlashOnChange(schedule.finish, (prev, next) =>
+    String(next) < String(prev) ? "good" : String(next) > String(prev) ? "bad" : "neutral",
+  );
 
   return (
-    <main className="flex min-h-screen flex-col bg-neutral-50 lg:h-screen">
+    <main className="flex min-h-screen flex-col bg-paper text-ink lg:h-screen">
       <header className="border-b border-neutral-200 bg-white px-5 py-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Project timeline for {project.clientName}</p>
-            <h1 className="text-xl font-semibold tracking-tight">{project.name}</h1>
+            <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Project timeline for {project.clientName}</p>
+            <h1 className="text-xl text-title">{project.name}</h1>
           </div>
-          <div className="text-sm text-neutral-700" data-testid="portal-launch">
+          <div className={`text-sm text-ink-muted ${flashClass(launchFlash)}`} data-testid="portal-launch">
             {schedule.finish ? (
               <>
-                Projected launch <span className="font-semibold text-neutral-900">{formatDate(schedule.finish)}</span>
+                Projected launch <span className="font-semibold text-ink">{formatDate(schedule.finish)}</span>
                 {ahead !== null && ahead > 0 && <span className="ml-1 font-medium text-emerald-700">· {plural(ahead, "day")} ahead of plan</span>}
                 {ahead !== null && ahead < 0 && <span className="ml-1 font-medium text-amber-700">· {plural(-ahead, "day")} behind plan</span>}
               </>
@@ -114,10 +119,10 @@ export default function PortalView({ token, initial }: { token: string; initial:
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <section aria-label="Payments" className="w-full shrink-0 overflow-y-auto border-neutral-200 bg-white p-5 lg:w-[400px] lg:border-r">
           <h2 className="text-sm font-semibold">Payments</h2>
-          <p className="mt-1 text-xs text-neutral-500">
+          <p className="mt-1 text-xs text-ink-muted">
             Each phase starts once the previous milestone is paid, so paying sooner can bring your launch forward.
           </p>
-          {open.length === 0 && <p className="mt-4 text-sm text-neutral-600">Nothing is due right now. Thank you!</p>}
+          {open.length === 0 && <p className="mt-4 text-sm text-ink-muted">Nothing is due right now. Thank you!</p>}
           <ul className="mt-3 space-y-3">
             {open.map((invoice) => {
               const effect = effects[effectKey(invoice)];
@@ -132,14 +137,14 @@ export default function PortalView({ token, initial }: { token: string; initial:
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-medium">{invoice.milestone}</p>
-                      <p className="text-xs text-neutral-500">Invoice #{invoice.number}</p>
+                      <p className="text-xs text-ink-muted">Invoice #{invoice.number}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold tabular-nums">{money(discount ? discount.discountedCents : invoice.amountCents)}</p>
-                      {discount && <p className="text-xs text-neutral-500 line-through">{money(invoice.amountCents)}</p>}
+                      {discount && <p className="text-xs text-ink-muted line-through">{money(invoice.amountCents)}</p>}
                     </div>
                   </div>
-                  <p className={`mt-2 text-xs font-medium ${invoice.overdue ? "text-red-700" : "text-neutral-600"}`}>
+                  <p className={`mt-2 text-xs font-medium ${invoice.overdue ? "text-red-700" : "text-ink-muted"}`}>
                     {invoice.overdue && due ? `Overdue since ${formatDate(due)}` : due ? `Due ${formatDate(due)}` : "Due on receipt"}
                   </p>
                   {discount && (
@@ -158,39 +163,43 @@ export default function PortalView({ token, initial }: { token: string; initial:
                         href={invoice.payUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded-lg bg-[#0070ba] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#005ea6]"
+                        className={`${buttonClass()} min-h-11`}
                       >
                         Pay with PayPal
                       </a>
                     )}
                     {invoice.hasQr && (
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
                         onClick={() => setQrFor((id) => (id === invoice.id ? null : invoice.id))}
-                        className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100"
                         aria-expanded={qrFor === invoice.id}
                       >
                         {qrFor === invoice.id ? "Hide QR" : "Scan to pay"}
-                      </button>
+                      </Button>
                     )}
                   </div>
-                  {qrFor === invoice.id && (
-                    // eslint-disable-next-line @next/next/no-img-element -- dynamic PNG from our API
-                    <img
-                      src={`/api/portal/${token}/invoices/${invoice.id}/qr`}
-                      alt={`PayPal QR code for invoice ${invoice.number}`}
-                      width={180}
-                      height={180}
-                      className="mt-3"
-                    />
-                  )}
+                  <div className={`pp-reveal ${qrFor === invoice.id ? "pp-reveal-open" : ""}`}>
+                    <div className="pp-reveal-inner">
+                      {qrFor === invoice.id && (
+                        // eslint-disable-next-line @next/next/no-img-element -- dynamic PNG
+                        <img
+                          src={`/api/portal/${token}/invoices/${invoice.id}/qr`}
+                          alt={`PayPal QR code for invoice ${invoice.number}`}
+                          width={180}
+                          height={180}
+                          className="mt-3"
+                        />
+                      )}
+                    </div>
+                  </div>
                 </li>
               );
             })}
           </ul>
           {paid.length > 0 && (
             <>
-              <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-neutral-500">Paid</h3>
+              <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-ink-muted">Paid</h3>
               <ul className="mt-2 space-y-1 text-sm">
                 {paid.map((invoice) => (
                   <li key={invoice.id} className="flex justify-between gap-3" data-testid="portal-paid">
@@ -200,7 +209,7 @@ export default function PortalView({ token, initial }: { token: string; initial:
                         <span className="ml-1 text-xs text-emerald-700">(saved {money(invoice.discount.savingsCents)})</span>
                       )}
                     </span>
-                    <span className="text-neutral-600">
+                    <span className="text-ink-muted">
                       {money(invoice.paidAmountCents ?? invoice.amountCents)} · {invoice.paidAt ? formatDate(toIsoDate(invoice.paidAt)) : "paid"}
                     </span>
                   </li>
@@ -208,7 +217,7 @@ export default function PortalView({ token, initial }: { token: string; initial:
               </ul>
             </>
           )}
-          <p className="mt-8 text-xs text-neutral-400">Shared with you by your project team via PaidPath. Payments are processed by PayPal (sandbox).</p>
+          <p className="mt-8 text-xs text-ink-muted">Shared with you by your project team via PaidPath. Payments are processed by PayPal (sandbox).</p>
         </section>
 
         <section aria-label="Timeline" className="h-[70vh] flex-none lg:h-auto lg:min-h-0 lg:flex-1">

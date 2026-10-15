@@ -30,6 +30,7 @@ import type { InvoiceAction, InvoicesSnapshot, TaskInvoiceStatus } from "@/compo
 import type { ClockState } from "@/components/workspace/DemoClock";
 import type { MilestoneCash } from "@/lib/cashflow";
 import { LAST_RESORT_MODEL } from "@/lib/models";
+import { prefersReducedMotion } from "@/lib/motion";
 import {
   addDays,
   expectedPayment,
@@ -163,6 +164,7 @@ function createGanttProps(options: RefObject<Options>): BryntumGanttProps {
 
   return {
     viewPreset: "weekAndDayLetter",
+    enableEventAnimations: !prefersReducedMotion(),
     // Compact rows so the whole first phase fits on a laptop screen.
     rowHeight: 38,
     barMargin: 7,
@@ -520,7 +522,10 @@ export default function PlanGantt({
     const task = focusTaskId && project.current?.instance?.taskStore.getById(focusTaskId.id);
     if (!instance || !task) return;
     instance.selectRow({ record: task });
-    void instance.scrollTaskIntoView(task as TaskModel, { highlight: true, animate: true });
+    void instance.scrollTaskIntoView(task as TaskModel, {
+      highlight: true,
+      animate: !prefersReducedMotion(),
+    });
   }, [focusTaskId]);
 
   const retry = (action: "load" | "sync") => () => {

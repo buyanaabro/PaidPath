@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { GanttApi } from "@/components/gantt/PlanGantt";
+import Button from "@/components/ui/Button";
+import Dialog from "@/components/ui/Dialog";
 import {
   DISCOUNT_PERCENTS,
   DISCOUNT_WINDOWS,
@@ -80,22 +82,24 @@ export default function SendInvoiceDialog({ milestone, client, termsDays, today,
   const savings = discountAmountCents(milestone.amountCents, percent);
   const choose = (update: Partial<{ enabled: boolean; percent: number; days: number }>) =>
     setChoice({ enabled, percent, days, ...update });
+  const sendRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="send-invoice-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onCancel}
+    <Dialog
+      open
+      onClose={onCancel}
+      labelledBy="send-invoice-title"
+      initialFocusRef={sendRef}
     >
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
         <h2 id="send-invoice-title" className="text-lg font-semibold">
           Send PayPal invoice
         </h2>
-        <p className="mt-1 text-sm text-neutral-600">
-          <span className="font-medium text-neutral-900">{name}</span> — {money(milestone.amountCents)} to {client.name}{" "}
-          &lt;{client.email}&gt;, due {formatDate(addDays(today, termsDays))} ({plural(termsDays, "day")}).
+        <p className="mt-1 text-sm text-ink-muted">
+          <span className="font-medium text-ink">{name}</span> —{" "}
+          {money(milestone.amountCents)} to {client.name}{" "}
+          &lt;{client.email}&gt;, due{" "}
+          {formatDate(addDays(today, termsDays))} ({plural(termsDays, "day")}
+          ).
         </p>
 
         <div className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm" data-testid="discount-suggestion">
@@ -166,22 +170,16 @@ export default function SendInvoiceDialog({ milestone, client, termsDays, today,
         )}
 
         <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-100"
-          >
+          <Button variant="secondary" onClick={onCancel}>
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            ref={sendRef}
             onClick={() => onSend(enabled ? { percent, days } : null)}
-            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-700"
           >
             Send invoice
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

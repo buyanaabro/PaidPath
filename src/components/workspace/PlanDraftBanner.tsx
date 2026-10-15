@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { acceptPlan, regeneratePlan } from "@/app/projects/actions";
+import Button from "@/components/ui/Button";
 
 type Props = {
   projectId: number;
@@ -48,54 +49,52 @@ export default function PlanDraftBanner({ projectId, onRegenerated }: Props) {
     <div className="border-b border-violet-200 bg-violet-50 px-6 py-3 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-violet-900">
-          <span className="font-semibold">AI draft.</span> Review the phases, durations and
-          milestone prices — edit anything on the timeline, then accept the plan.
+          <span className="font-semibold">AI draft.</span> Review the phases,
+          durations and milestone prices — edit anything on the timeline, then
+          accept the plan.
         </p>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             disabled={pending}
             onClick={() => setShowFeedback((v) => !v)}
-            className="rounded-lg border border-violet-300 bg-white px-3 py-1.5 font-medium text-violet-900 hover:bg-violet-100 disabled:opacity-50"
           >
             Regenerate…
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             disabled={pending}
             onClick={() => run("accept")}
-            className="rounded-lg bg-violet-700 px-3 py-1.5 font-medium text-white hover:bg-violet-600 disabled:opacity-50"
           >
             {busy === "accept" ? "Accepting…" : "Accept plan"}
-          </button>
+          </Button>
         </div>
       </div>
 
-      {showFeedback && (
-        <form
-          className="mt-3 flex flex-wrap items-center gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            run("regenerate");
-          }}
-        >
-          <input
-            value={feedback}
-            onChange={(event) => setFeedback(event.target.value)}
-            disabled={pending}
-            maxLength={500}
-            placeholder="What should change? e.g. “shorter discovery, add a training phase”"
-            className="min-w-64 flex-1 rounded-lg border border-violet-300 bg-white px-3 py-1.5 focus:border-violet-700 focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-lg bg-violet-700 px-3 py-1.5 font-medium text-white hover:bg-violet-600 disabled:opacity-50"
+      <div className={`pp-reveal ${showFeedback ? "pp-reveal-open" : ""}`}>
+        <div className="pp-reveal-inner">
+          <form
+            className="mt-3 flex flex-wrap items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              run("regenerate");
+            }}
           >
-            {busy === "regenerate" ? "Re-planning…" : "Regenerate plan"}
-          </button>
-        </form>
-      )}
+            <input
+              value={feedback}
+              onChange={(event) => setFeedback(event.target.value)}
+              disabled={pending}
+              maxLength={500}
+              placeholder="What should change? e.g. “shorter discovery, add a training phase”"
+              className="pp-field min-w-64 flex-1"
+            />
+            <Button type="submit" size="sm" disabled={pending}>
+              {busy === "regenerate" ? "Re-planning…" : "Regenerate plan"}
+            </Button>
+          </form>
+        </div>
+      </div>
 
       {error && (
         <p role="alert" className="mt-2 text-red-800">

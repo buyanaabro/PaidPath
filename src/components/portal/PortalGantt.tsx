@@ -15,6 +15,7 @@ import { simulatePayments } from "@/components/gantt/simulate";
 import { showToday } from "@/components/gantt/today-line";
 import type { TaskInvoiceStatus } from "@/components/invoices/useInvoices";
 import { daysBetween, type IsoDate } from "@/lib/gates";
+import { prefersReducedMotion } from "@/lib/motion";
 
 export type PortalGanttApi = {
   /** Projected launch if the client paid this milestone's invoice today (null if no change). */
@@ -39,6 +40,7 @@ function createProps(gate: RefObject<GateContext>): BryntumGanttProps {
   return {
     readOnly: true,
     viewPreset: "weekAndDayLetter",
+    enableEventAnimations: !prefersReducedMotion(),
     barMargin: 8,
     subGridConfigs: { locked: { width: nameWidth } },
     columns: [{ type: "name", field: "name", width: nameWidth }],

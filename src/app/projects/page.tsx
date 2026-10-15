@@ -2,6 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import AppHeader from "@/components/AppHeader";
 import DemoButton from "@/components/DemoButton";
+import { buttonClass } from "@/components/ui/Button";
 import { getDb } from "@/db/client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { listProjects } from "@/server/projects";
@@ -14,20 +15,17 @@ export default async function ProjectsPage() {
   const projects = listProjects(getDb(), await readVisitor());
 
   return (
-    <div className="min-h-screen bg-neutral-50">
+    <div className="min-h-screen bg-paper text-ink">
       <AppHeader />
       <main className="mx-auto max-w-4xl px-6 py-10">
         <div className="mb-6 flex items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-            <p className="text-sm text-neutral-600">
+            <h1 className="text-2xl text-title">Projects</h1>
+            <p className="text-sm text-ink-muted">
               Every milestone is a PayPal invoice. Unpaid invoices hold up the work behind them.
             </p>
           </div>
-          <Link
-            href="/projects/new"
-            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-          >
+          <Link href="/projects/new" className={buttonClass()}>
             New project
           </Link>
         </div>
@@ -35,14 +33,14 @@ export default async function ProjectsPage() {
         {projects.length === 0 ? (
           <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-10 text-center">
             <p className="font-medium">No projects yet</p>
-            <p className="mt-1 text-sm text-neutral-600">
+            <p className="mt-1 text-sm text-ink-muted">
               Try the demo project, or paste a client brief and the AI architect drafts a priced plan for you.
             </p>
             <div className="mt-5 flex justify-center gap-3">
               <DemoButton />
               <Link
                 href="/projects/new"
-                className="rounded-lg border border-neutral-300 bg-white px-5 py-2.5 text-sm font-semibold hover:bg-neutral-50"
+                className={buttonClass({ variant: "secondary" })}
               >
                 Start from a brief
               </Link>
@@ -58,7 +56,7 @@ export default async function ProjectsPage() {
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium">{project.name}</p>
-                    <p className="text-sm text-neutral-600">
+                    <p className="text-sm text-ink-muted">
                       {project.clientName} · starts {formatDate(project.startDate)}
                     </p>
                   </div>
